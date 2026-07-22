@@ -5,6 +5,7 @@ import KinemaPlayback
 public struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var preferences: PreferencesStore { PreferencesStore.shared }
+    @State private var fontFamilies: [SubtitleFontOption] = []
 
     public init() {}
 
@@ -27,6 +28,13 @@ public struct SettingsView: View {
                     Button(KinemaCopy.done) { dismiss() }
                 }
             }
+            .onAppear {
+                _ = SubtitleFontRegistry.prepare()
+                if fontFamilies.isEmpty {
+                    fontFamilies = SubtitleFontRegistry.availableFontFamilies()
+                }
+            }
+            .tint(KinemaTheme.accent)
         }
         #if os(macOS)
         .frame(minWidth: 480, idealWidth: 520, minHeight: 560)
@@ -37,7 +45,7 @@ public struct SettingsView: View {
         KinemaSheetHero(
             icon: "gearshape.fill",
             title: KinemaCopy.appName,
-            subtitle: "Tune playback, captions, and your collection."
+            subtitle: "Tune playback, subtitles, and your collection."
         )
     }
 
@@ -52,17 +60,54 @@ public struct SettingsView: View {
 
             KinemaCard(title: KinemaCopy.captions, icon: "captions.bubble") {
                 SettingsToggleRow(
-                    title: "Auto-load captions",
-                    subtitle: "Turn on embedded captions or matching sidecar files when a title starts.",
+                    title: KinemaCopy.captionsAutoLoad,
+                    subtitle: KinemaCopy.captionsAutoLoadSubtitle,
                     isOn: binding(\.autoLoadSubtitles)
                 )
-                Stepper("\(KinemaCopy.captionsSize): \(preferences.preferences.subtitleFontSize)",
-                        value: binding(\.subtitleFontSize), in: 20...80)
+
+                SettingsMenuRow(
+                    title: KinemaCopy.captionsFont,
+                    value: selectedFontDisplayName
+                ) {
+                    ForEach(fontFamilies) { font in
+                        Button(font.displayName) {
+                            preferences.preferences.subtitleFontID = font.id
+                        }
+                    }
+                }
+
+                SettingsColorSwatchRow(
+                    title: KinemaCopy.captionsColor,
+                    hex: binding(\.subtitleColorHex)
+                )
+
+                SettingsSliderRow(
+                    title: KinemaCopy.captionsSize,
+                    valueText: "\(preferences.preferences.subtitleFontSize)",
+                    value: Binding(
+                        get: { Double(preferences.preferences.subtitleFontSize) },
+                        set: { preferences.preferences.subtitleFontSize = Int($0.rounded()) }
+                    ),
+                    range: 20...80,
+                    step: 1
+                )
+
+                SettingsMenuRow(
+                    title: KinemaCopy.captionsEncoding,
+                    value: selectedEncodingDisplayName
+                ) {
+                    ForEach(SubtitlePreferenceCatalog.encodings) { encoding in
+                        Button(encoding.displayName) {
+                            preferences.preferences.subtitleEncodingID = encoding.id
+                        }
+                    }
+                }
             }
 
             #if os(macOS)
             KinemaCard(title: "macOS", icon: "macbook") {
                 Toggle("Enable Music Mode window", isOn: binding(\.musicModeEnabled))
+                    .tint(KinemaTheme.accent)
                 Text("Open via Window → Music Mode when a track is playing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -96,6 +141,14 @@ public struct SettingsView: View {
         }
     }
 
+    private var selectedFontDisplayName: String {
+        SubtitleFontRegistry.resolveStoredFontSelection(preferences.preferences.subtitleFontID).displayName
+    }
+
+    private var selectedEncodingDisplayName: String {
+        SubtitlePreferenceCatalog.encoding(id: preferences.preferences.subtitleEncodingID).displayName
+    }
+
     private func binding<T>(_ keyPath: WritableKeyPath<KinemaPreferences, T>) -> Binding<T> {
         Binding(
             get: { preferences.preferences[keyPath: keyPath] },
@@ -118,6 +171,7 @@ private struct SettingsToggleRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .tint(KinemaTheme.accent)
     }
 }
 
@@ -145,5 +199,119 @@ private struct SettingsSliderRow: View {
                     .tint(KinemaTheme.accent)
             }
         }
+    }
+}
+
+private struct SettingsMenuRow<Content: View>: View {
+    let title: String
+    let value: String
+    @ViewBuilder let content: Content
+
+    init(title: String, value: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.value = value
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: 12)
+            Menu {
+                content
+            } label: {
+                HStack(spacing: 6) {
+                    Text(value)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(KinemaTheme.accent)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    KinemaTheme.accent.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(KinemaTheme.accent.opacity(0.22), lineWidth: 0.5)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+private struct SettingsColorSwatchRow: View {
+    let title: String
+    @Binding var hex: String
+
+    private let presets: [(name: String, hex: String)] = [
+        ("White", "#FFFFFFFF"),
+        ("Yellow", "#FFFFFF00"),
+        ("Cyan", "#FF00FFFF"),
+        ("Lime", "#FF00FF00"),
+        ("Orange", "#FFFFAA00"),
+        ("Red", "#FFFF5555"),
+        ("Gray", "#FFB0B0B0")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(selectedPresetName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                ForEach(presets, id: \.hex) { preset in
+                    let selected = normalizedSubtitleColorHex(hex) == normalizedSubtitleColorHex(preset.hex)
+                    Button {
+                        hex = preset.hex
+                    } label: {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color(subtitleHex: preset.hex))
+                            .frame(width: 28, height: 28)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(
+                                        selected ? KinemaTheme.accent : Color.primary.opacity(0.12),
+                                        lineWidth: selected ? 2 : 0.5
+                                    )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(preset.name)
+                }
+            }
+        }
+    }
+
+    private var selectedPresetName: String {
+        let current = normalizedSubtitleColorHex(hex)
+        return presets.first(where: { normalizedSubtitleColorHex($0.hex) == current })?.name ?? "Custom"
+    }
+}
+
+private extension Color {
+    init(subtitleHex: String) {
+        let normalized = normalizedSubtitleColorHex(subtitleHex)
+        var value = normalized
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 8, let int = UInt32(value, radix: 16) else {
+            self = .white
+            return
+        }
+        let a = Double((int >> 24) & 0xFF) / 255
+        let r = Double((int >> 16) & 0xFF) / 255
+        let g = Double((int >> 8) & 0xFF) / 255
+        let b = Double(int & 0xFF) / 255
+        self = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
 }

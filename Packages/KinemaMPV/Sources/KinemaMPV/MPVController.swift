@@ -269,6 +269,25 @@ public final class MPVController: @unchecked Sendable {
         }
     }
 
+    public func setSubtitleFont(_ fontName: String) {
+        commandQueue.async { [weak self] in
+            guard !fontName.isEmpty else { return }
+            self?.command(["set", MPVOption.subFont.rawValue, fontName])
+        }
+    }
+
+    public func setSubtitleColor(_ hex: String) {
+        commandQueue.async { [weak self] in
+            self?.command(["set", MPVOption.subColor.rawValue, hex])
+        }
+    }
+
+    public func setSubtitleCodepage(_ codepage: String) {
+        commandQueue.async { [weak self] in
+            self?.command(["set", MPVOption.subCodepage.rawValue, codepage])
+        }
+    }
+
     public func cycleSubtitle() {
         commandQueue.async { [weak self] in
             self?.command(["cycle", "sub"])

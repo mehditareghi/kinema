@@ -16,6 +16,12 @@ To obtain source code for LGPL/GPL components, visit the URLs above or contact t
 - **License:** Unlicense (public domain)
 - **Source:** https://github.com/yt-dlp/yt-dlp
 
+## Vazirmatn (bundled subtitle font)
+
+- **License:** SIL Open Font License 1.1
+- **Source:** https://github.com/rastikerdar/vazirmatn
+- **License text:** `LICENSES/Vazirmatn-OFL.txt`
+
 ## Kinema Application Code
 
 - **License:** MIT License

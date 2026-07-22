@@ -22,6 +22,7 @@ struct KinemaApp: App {
                     handleIncomingURL(url)
                 }
                 .onAppear {
+                    _ = SubtitleFontRegistry.prepare()
                     Task { await PluginRegistry.shared.activateAll(for: viewModel.session) }
                 }
         }

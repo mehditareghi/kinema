@@ -435,9 +435,9 @@ public final class PlayerSession: PlaybackEngine {
             try? await Task.sleep(for: .milliseconds(300))
             refreshTracks(force: true)
             if let track = activeSubtitleTrack {
-                controller.showOSD("Captions: \(SubtitleLabels.displayName(for: track))")
+                controller.showOSD("Subtitles: \(SubtitleLabels.displayName(for: track))")
             } else {
-                controller.showOSD("Captions loaded")
+                controller.showOSD("Subtitles loaded")
             }
         }
     }
@@ -445,14 +445,14 @@ public final class PlayerSession: PlaybackEngine {
     public func disableSubtitles() {
         controller.disableSubtitles()
         refreshTracks(force: true)
-        controller.showOSD("Captions off")
+        controller.showOSD("Subtitles off")
     }
 
     public func selectSubtitleTrack(id: Int) {
         controller.selectTrack(id: id, kind: .subtitle)
         refreshTracks(force: true)
         if let track = activeSubtitleTrack {
-            controller.showOSD("Captions: \(SubtitleLabels.displayName(for: track))")
+            controller.showOSD("Subtitles: \(SubtitleLabels.displayName(for: track))")
         }
     }
 

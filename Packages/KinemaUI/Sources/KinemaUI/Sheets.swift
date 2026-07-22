@@ -199,7 +199,7 @@ public struct SubtitlePickerSheet: View {
             }
         }
 
-        KinemaCard(title: "Add captions", icon: "doc.badge.plus") {
+        KinemaCard(title: "Add subtitles", icon: "doc.badge.plus") {
             Button {
                 #if os(macOS)
                 openMacSubtitlePicker()

@@ -152,13 +152,27 @@ public actor OpenSubtitlesClient {
 }
 
 public enum SubtitleStyling {
-    public static func mpvOptions(fontSize: Int) -> [String: String] {
-        [
+    public static func mpvOptions(
+        fontSize: Int,
+        fontName: String = "",
+        colorHex: String = SubtitlePreferenceCatalog.defaultColorHex,
+        encodingID: String = SubtitlePreferenceCatalog.defaultEncodingID,
+        fontsDirectory: URL? = SubtitleFontRegistry.prepare()
+    ) -> [String: String] {
+        var options: [String: String] = [
             "sub-font-size": "\(fontSize)",
             "sub-border-size": "2",
             "sub-shadow-offset": "1",
-            "sub-color": "#FFFFFF",
-            "sub-border-color": "#000000"
+            "sub-color": normalizedSubtitleColorHex(colorHex),
+            "sub-border-color": "#000000",
+            "sub-codepage": SubtitlePreferenceCatalog.encoding(id: encodingID).id
         ]
+        if let fontsDirectory {
+            options["sub-fonts-dir"] = fontsDirectory.path
+        }
+        if !fontName.isEmpty {
+            options["sub-font"] = fontName
+        }
+        return options
     }
 }

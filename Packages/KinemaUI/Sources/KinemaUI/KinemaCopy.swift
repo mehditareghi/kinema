@@ -79,15 +79,21 @@ public enum KinemaCopy {
 
     public static let lineup = "Lineup"
     public static let preferences = "Preferences"
-    public static let captions = "Captions"
+    public static let captions = "Subtitles"
     public static let captionsOff = "Off"
     public static let captionsEmbedded = "In this video"
     public static let captionsSidecar = "Sidecar files"
     public static let captionsBrowse = "Browse for subtitle file…"
-    public static let captionsNoneAvailable = "No captions for this title yet."
+    public static let captionsNoneAvailable = "No subtitles for this title yet."
     public static let captionsNowPlaying = "Now showing"
-    public static let captionsSize = "Caption size"
+    public static let captionsSize = "Font size"
+    public static let captionsFont = "Font"
+    public static let captionsColor = "Color"
+    public static let captionsEncoding = "Text encoding"
     public static let captionsSearchOnline = "Search online"
+    public static let captionsAutoLoad = "Auto-load subtitles"
+    public static let captionsAutoLoadSubtitle =
+        "Turn on embedded subtitles or matching sidecar files when a title starts."
 
     // MARK: - Actions
 

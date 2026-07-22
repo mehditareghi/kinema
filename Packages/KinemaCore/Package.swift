@@ -14,7 +14,10 @@ let package = Package(
     targets: [
         .target(
             name: "KinemaCore",
-            resources: [.process("Resources")]
+            resources: [
+                .process("Resources/DefaultKeyBindings.json"),
+                .copy("Resources/Fonts")
+            ]
         )
     ]
 )

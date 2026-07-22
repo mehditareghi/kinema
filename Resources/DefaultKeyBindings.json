@@ -1,0 +1,57 @@
+[
+  {
+    "action": "play-pause",
+    "keys": ["space"],
+    "description": "Play / Pause"
+  },
+  {
+    "action": "seek-back-5",
+    "keys": ["left", "j"],
+    "description": "Seek back 5 seconds"
+  },
+  {
+    "action": "seek-forward-5",
+    "keys": ["right", "l"],
+    "description": "Seek forward 5 seconds"
+  },
+  {
+    "action": "pause",
+    "keys": ["k"],
+    "description": "Pause"
+  },
+  {
+    "action": "volume-up",
+    "keys": ["up"],
+    "description": "Volume up"
+  },
+  {
+    "action": "volume-down",
+    "keys": ["down"],
+    "description": "Volume down"
+  },
+  {
+    "action": "mute",
+    "keys": ["m"],
+    "description": "Mute"
+  },
+  {
+    "action": "fullscreen",
+    "keys": ["f"],
+    "description": "Toggle fullscreen"
+  },
+  {
+    "action": "speed-up",
+    "keys": ["]"],
+    "description": "Increase speed"
+  },
+  {
+    "action": "speed-down",
+    "keys": ["["],
+    "description": "Decrease speed"
+  },
+  {
+    "action": "subtitle-cycle",
+    "keys": ["v"],
+    "description": "Cycle subtitles"
+  }
+]

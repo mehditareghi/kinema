@@ -1,0 +1,178 @@
+import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
+import KinemaCore
+import KinemaPlayback
+import KinemaMPV
+
+public struct PlayerView: View {
+    @Bindable var viewModel: PlayerViewModel
+    @Bindable private var preferences = PreferencesStore.shared
+
+    public init(viewModel: PlayerViewModel) {
+        self.viewModel = viewModel
+    }
+
+    private var accent: Color { KinemaTheme.accent }
+
+    public var body: some View {
+        ZStack {
+            KinemaTheme.playerBackground.ignoresSafeArea()
+
+            #if os(iOS) || os(tvOS)
+            if let surface = viewModel.session.renderSurface as? AVFoundationRenderSurface {
+                MPVPlatformView(surface: surface)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+            }
+            #elseif os(macOS)
+            if let surface = viewModel.session.renderSurface as? MacOSRenderSurface {
+                MPVPlatformView(surface: surface)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+            }
+            #endif
+
+            playerTapLayer
+
+            #if os(iOS) || os(macOS)
+            PlayerSideGestureOverlay(viewModel: viewModel, accent: accent)
+                .zIndex(2)
+            #endif
+
+            if viewModel.showControls {
+                PlayerControlsOverlay(viewModel: viewModel, accent: accent)
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+
+            OSDOverlay(message: viewModel.osdMessage)
+                .zIndex(3)
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: viewModel.showControls)
+        .onChange(of: viewModel.isInPlayer) { _, _ in
+            ScreenWakeLock.apply(
+                playerVisible: viewModel.isInPlayer,
+                state: viewModel.session.state
+            )
+        }
+        .onChange(of: viewModel.session.state) { _, state in
+            ScreenWakeLock.apply(
+                playerVisible: viewModel.isInPlayer,
+                state: state
+            )
+        }
+        .onAppear {
+            ScreenWakeLock.apply(
+                playerVisible: viewModel.isInPlayer,
+                state: viewModel.session.state
+            )
+            if viewModel.isInPlayer {
+                viewModel.scheduleHideControls()
+            }
+        }
+        .onDisappear {
+            ScreenWakeLock.setPreventSleep(false)
+        }
+        .sheet(isPresented: $viewModel.showPlaylist) {
+            PlaylistSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showSubtitles) {
+            SubtitlePickerSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showSettings) {
+            SettingsView()
+        }
+        .onChange(of: viewModel.showSettings) { _, isShowing in
+            if isShowing {
+                viewModel.cancelAutoHideControls()
+            } else if viewModel.showControls {
+                viewModel.scheduleHideControls()
+            }
+        }
+        #if os(macOS)
+        .onKeyPress { press in
+            guard viewModel.handlesKey(press.characters) else { return .ignored }
+            viewModel.handleKey(press.characters)
+            return .handled
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private var playerTapLayer: some View {
+        #if os(iOS) || os(tvOS)
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture { viewModel.toggleControls() }
+            .ignoresSafeArea()
+            .allowsHitTesting(!viewModel.showControls)
+        #elseif os(macOS)
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture { viewModel.toggleControls() }
+            .ignoresSafeArea()
+            .allowsHitTesting(!viewModel.showControls)
+        #endif
+    }
+}
+
+public struct RootView: View {
+    @Environment(PlayerViewModel.self) private var viewModel
+
+    public init() {}
+
+    public var body: some View {
+        @Bindable var viewModel = viewModel
+
+        #if os(tvOS)
+        PlayerView(viewModel: viewModel)
+        #else
+        ZStack {
+            PlayerView(viewModel: viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(viewModel.isInPlayer ? 1 : 0)
+                .allowsHitTesting(viewModel.isInPlayer)
+                .accessibilityHidden(!viewModel.isInPlayer)
+
+            LibraryShellView(viewModel: viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(viewModel.isInPlayer ? 0 : 1)
+                .allowsHitTesting(!viewModel.isInPlayer)
+                .accessibilityHidden(viewModel.isInPlayer)
+        }
+        .animation(.easeInOut(duration: 0.28), value: viewModel.appMode)
+        #if os(macOS)
+        .onAppear { viewModel.prepare() }
+        #endif
+        #endif
+    }
+}
+
+#if os(macOS)
+import AppKit
+
+public struct MusicModeView: View {
+    @Bindable var viewModel: PlayerViewModel
+
+    public init(viewModel: PlayerViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        VStack(spacing: 20) {
+            KinemaMark(size: 56)
+            Text(viewModel.session.currentItem?.title ?? "No track")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            TransportBar(
+                viewModel: viewModel,
+                accent: KinemaTheme.accent
+            )
+        }
+        .padding(24)
+        .frame(width: 360, height: 300)
+    }
+}
+#endif

@@ -1,0 +1,1087 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		015C12545B76AE73D1F1260E /* KinemaUI in Frameworks */ = {isa = PBXBuildFile; productRef = 283DFAF09AB900420C147F36 /* KinemaUI */; };
+		06DEA4C5D6F18D8EDF92F4A0 /* ShareViewController+macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88F669202A1D6ACCC962FFE9 /* ShareViewController+macOS.swift */; };
+		1645A7449C03CDAE6314938C /* MacOSDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */; };
+		191A85A50385A445FFFDB0AE /* KinemaUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4F60428630AC9E1846C40E21 /* KinemaUI */; };
+		195272A0BAC1EC28CEEACEC5 /* DefaultKeyBindings.json in Resources */ = {isa = PBXBuildFile; fileRef = 09FC2C39B9876A2A05BBB274 /* DefaultKeyBindings.json */; };
+		1A7E08FD0CF35292CBA150DD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */; };
+		28332507839DC0DAA82FBC17 /* DefaultKeyBindings.json in Resources */ = {isa = PBXBuildFile; fileRef = 09FC2C39B9876A2A05BBB274 /* DefaultKeyBindings.json */; };
+		45126EDD8E7C8208654E96BF /* ShareViewController+iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E7324B091875EF8DFBEDD /* ShareViewController+iOS.swift */; };
+		4992E6463E0AE00FDBBBA5CD /* TopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */; };
+		58C15D21B9C0D55CC7007805 /* TopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */; };
+		5CDC3C89CFCD081E48C541B5 /* MacOSDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */; };
+		6E1345040C8661F9BE08B58E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */; };
+		7584055BA1A1710DBD70062B /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = 2ACD2F00070075B72304A9A2 /* KinemaPlugins */; };
+		7FDCC73F7A2DCEE652F6D884 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */; };
+		846424962C76CACBA665F1D3 /* KinemaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 966574DFB6D3BEAC9F9388A6 /* KinemaCore */; };
+		8830A0653DD6105F1A323898 /* TopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */; };
+		8A2CFF2758EADD0067B605DC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */; };
+		917704844F01D70EDF70835B /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = E26103BB742D4DA98F1BFE14 /* KinemaPlugins */; };
+		917725C5E2EA2DEA0327CF80 /* KinemaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 44F5D2FCD8A480B7CB131974 /* KinemaCore */; };
+		A82D111EB039F1977C8AB87C /* KinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */; };
+		B5A9E07E76BF8DBEDD71985B /* KinemaShareExtension_macOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B7ED04799C331EC47A8CE293 /* KinemaUI in Frameworks */ = {isa = PBXBuildFile; productRef = EEA69E5A5A82C84782AAF3CE /* KinemaUI */; };
+		BEF6AE8D01F8F5C0384922CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */; };
+		C0C919EDAEA8037530D68948 /* KinemaShareExtension_iOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2BBC431D00891D1ABBE1094A /* KinemaShareExtension_iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CBA7025050350B9338023411 /* DefaultKeyBindings.json in Resources */ = {isa = PBXBuildFile; fileRef = 09FC2C39B9876A2A05BBB274 /* DefaultKeyBindings.json */; };
+		CED77B07ECE050177C375105 /* KinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */; };
+		CFAB17C8364F44CC63D807BE /* KinemaCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113709FA613E16376C0625B6 /* KinemaCLI.swift */; };
+		DBA670239E526D1256C6B469 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */; };
+		DC3DC07A27D549612AB404D6 /* KinemaCore in Frameworks */ = {isa = PBXBuildFile; productRef = E40907D44A39E6940231F8C7 /* KinemaCore */; };
+		E669D188C207574EECBCFA30 /* MacOSDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */; };
+		E96FB8AB03DA4B74FADD241C /* KinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */; };
+		FB54454B5C6A5863B26740C2 /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = 2664A978B33B299C37556931 /* KinemaPlugins */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4FA60AA13F4BF5D3D7DBB95C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDA48CD05061E80051E8351B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5176039DFFE6FB1B0F80266E;
+			remoteInfo = KinemaShareExtension_iOS;
+		};
+		8444BACA067B5FE3A41F0E0B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDA48CD05061E80051E8351B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 024DCE193ED9788DF06CA24C;
+			remoteInfo = KinemaShareExtension_macOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6730FC3E2227C5A171E15B2D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C0C919EDAEA8037530D68948 /* KinemaShareExtension_iOS.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1BCC750AC02CF7D0B356D26 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B5A9E07E76BF8DBEDD71985B /* KinemaShareExtension_macOS.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		09FC2C39B9876A2A05BBB274 /* DefaultKeyBindings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = DefaultKeyBindings.json; sourceTree = "<group>"; };
+		0BFFF1C9E74194174906F58D /* KinemaPlugins */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaPlugins; path = Packages/KinemaPlugins; sourceTree = SOURCE_ROOT; };
+		113709FA613E16376C0625B6 /* KinemaCLI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KinemaCLI.swift; sourceTree = "<group>"; };
+		1CDDAF7D82EBC1A2507FAE60 /* KinemaMPV */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaMPV; path = Packages/KinemaMPV; sourceTree = SOURCE_ROOT; };
+		2BBC431D00891D1ABBE1094A /* KinemaShareExtension_iOS.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KinemaShareExtension_iOS.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F2E7324B091875EF8DFBEDD /* ShareViewController+iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareViewController+iOS.swift"; sourceTree = "<group>"; };
+		2F9AF70B8334B0E012273C94 /* KinemaUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaUI; path = Packages/KinemaUI; sourceTree = SOURCE_ROOT; };
+		3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KinemaApp.swift; sourceTree = "<group>"; };
+		4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelfContentProvider.swift; sourceTree = "<group>"; };
+		4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		70DDFFA86317B70B9B48D684 /* KinemaCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaCore; path = Packages/KinemaCore; sourceTree = SOURCE_ROOT; };
+		741E939FCF8949702B664DC6 /* Kinema_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kinema_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A8992930FEFE9A3B2322446 /* Kinema_tvOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kinema_tvOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KinemaShareExtension_macOS.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		88F669202A1D6ACCC962FFE9 /* ShareViewController+macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareViewController+macOS.swift"; sourceTree = "<group>"; };
+		ABA08970933D8E1D6023F21F /* Kinema.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kinema.entitlements; sourceTree = "<group>"; };
+		ABC91ED28305317F3B10CDAF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B12FCC4E4EBAB689396A45BC /* KinemaCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = KinemaCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		C892323DB999A567E7F850EE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CA38392ADC3B25ADB81ADD9F /* Kinema_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kinema_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE117492F7238C47E9A9A659 /* KinemaPlayback */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaPlayback; path = Packages/KinemaPlayback; sourceTree = SOURCE_ROOT; };
+		E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSDropModifier.swift; sourceTree = "<group>"; };
+		EEB7F7BF538762F74CC454A0 /* KinemaSubtitles */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaSubtitles; path = Packages/KinemaSubtitles; sourceTree = SOURCE_ROOT; };
+		F9351B728E2BBED573E48F66 /* KinemaMedia */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaMedia; path = Packages/KinemaMedia; sourceTree = SOURCE_ROOT; };
+		FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0828D77D8296E6A3345512C7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC3DC07A27D549612AB404D6 /* KinemaCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4BC403F968265160326907BB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				015C12545B76AE73D1F1260E /* KinemaUI in Frameworks */,
+				917704844F01D70EDF70835B /* KinemaPlugins in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A810B7256C6BE862AF269C8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				917725C5E2EA2DEA0327CF80 /* KinemaCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		916BB31995F919C9E6E4552C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				846424962C76CACBA665F1D3 /* KinemaCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EC05CE729D7CA752395A47AE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7ED04799C331EC47A8CE293 /* KinemaUI in Frameworks */,
+				FB54454B5C6A5863B26740C2 /* KinemaPlugins in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FC0127560F1FCF65ABE397E1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				191A85A50385A445FFFDB0AE /* KinemaUI in Frameworks */,
+				7584055BA1A1710DBD70062B /* KinemaPlugins in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0598446D0BBF264EFFD7DB33 /* KinemaCLI */ = {
+			isa = PBXGroup;
+			children = (
+				113709FA613E16376C0625B6 /* KinemaCLI.swift */,
+			);
+			path = KinemaCLI;
+			sourceTree = "<group>";
+		};
+		0D05E1B0921B77F4C26C8EE5 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		1B85270395533EAEAAD0CBEB /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */,
+				09FC2C39B9876A2A05BBB274 /* DefaultKeyBindings.json */,
+				4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		24BE9B05B11C6292C14AF5B1 /* Apps */ = {
+			isa = PBXGroup;
+			children = (
+				4CBD2D147DD0C6D161AA3CB5 /* Kinema */,
+				0598446D0BBF264EFFD7DB33 /* KinemaCLI */,
+				891BB02073F8CC7B59D97DF1 /* KinemaShareExtension */,
+			);
+			path = Apps;
+			sourceTree = "<group>";
+		};
+		2935D2DB8AC581CC676EFDD8 = {
+			isa = PBXGroup;
+			children = (
+				24BE9B05B11C6292C14AF5B1 /* Apps */,
+				400B17471558B78FD4BB34F3 /* Config */,
+				AFBED538C620F24679E1DE4E /* Packages */,
+				1B85270395533EAEAAD0CBEB /* Resources */,
+				7BDDBD8A2D74E76BB7B17B12 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		400B17471558B78FD4BB34F3 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		4CBD2D147DD0C6D161AA3CB5 /* Kinema */ = {
+			isa = PBXGroup;
+			children = (
+				0D05E1B0921B77F4C26C8EE5 /* macOS */,
+				900D5D9B8BCD79A002E4241F /* tvOS */,
+				C892323DB999A567E7F850EE /* Info.plist */,
+				ABA08970933D8E1D6023F21F /* Kinema.entitlements */,
+				3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */,
+			);
+			path = Kinema;
+			sourceTree = "<group>";
+		};
+		7BDDBD8A2D74E76BB7B17B12 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				741E939FCF8949702B664DC6 /* Kinema_iOS.app */,
+				CA38392ADC3B25ADB81ADD9F /* Kinema_macOS.app */,
+				7A8992930FEFE9A3B2322446 /* Kinema_tvOS.app */,
+				B12FCC4E4EBAB689396A45BC /* KinemaCLI */,
+				2BBC431D00891D1ABBE1094A /* KinemaShareExtension_iOS.appex */,
+				85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		891BB02073F8CC7B59D97DF1 /* KinemaShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				ABC91ED28305317F3B10CDAF /* Info.plist */,
+				2F2E7324B091875EF8DFBEDD /* ShareViewController+iOS.swift */,
+				88F669202A1D6ACCC962FFE9 /* ShareViewController+macOS.swift */,
+			);
+			path = KinemaShareExtension;
+			sourceTree = "<group>";
+		};
+		900D5D9B8BCD79A002E4241F /* tvOS */ = {
+			isa = PBXGroup;
+			children = (
+				4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */,
+			);
+			path = tvOS;
+			sourceTree = "<group>";
+		};
+		AFBED538C620F24679E1DE4E /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				70DDFFA86317B70B9B48D684 /* KinemaCore */,
+				F9351B728E2BBED573E48F66 /* KinemaMedia */,
+				1CDDAF7D82EBC1A2507FAE60 /* KinemaMPV */,
+				DE117492F7238C47E9A9A659 /* KinemaPlayback */,
+				0BFFF1C9E74194174906F58D /* KinemaPlugins */,
+				EEB7F7BF538762F74CC454A0 /* KinemaSubtitles */,
+				2F9AF70B8334B0E012273C94 /* KinemaUI */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		024DCE193ED9788DF06CA24C /* KinemaShareExtension_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 490D109F720CB8FE51AC0D53 /* Build configuration list for PBXNativeTarget "KinemaShareExtension_macOS" */;
+			buildPhases = (
+				B05F32B1AEFD2518EF97B461 /* Sources */,
+				916BB31995F919C9E6E4552C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KinemaShareExtension_macOS;
+			packageProductDependencies = (
+				966574DFB6D3BEAC9F9388A6 /* KinemaCore */,
+			);
+			productName = KinemaShareExtension_macOS;
+			productReference = 85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		15E0C2F8CD2DEEF789CBC351 /* Kinema_tvOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C99CCC414D4A752D5F5E2F21 /* Build configuration list for PBXNativeTarget "Kinema_tvOS" */;
+			buildPhases = (
+				AF0952D7FA71A9B874C9ACA5 /* Sources */,
+				136CAAC0BE4C8F9D3AB5C27A /* Resources */,
+				4BC403F968265160326907BB /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Kinema_tvOS;
+			packageProductDependencies = (
+				283DFAF09AB900420C147F36 /* KinemaUI */,
+				E26103BB742D4DA98F1BFE14 /* KinemaPlugins */,
+			);
+			productName = Kinema_tvOS;
+			productReference = 7A8992930FEFE9A3B2322446 /* Kinema_tvOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		1EC884DE97AFEC2E15826C42 /* Kinema_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 31552D1A1426637E18C54B59 /* Build configuration list for PBXNativeTarget "Kinema_iOS" */;
+			buildPhases = (
+				3C7D0F3341BAFE0D8FE7FA23 /* Sources */,
+				0E01AD3C4F65782FDF2A1D33 /* Resources */,
+				FC0127560F1FCF65ABE397E1 /* Frameworks */,
+				6730FC3E2227C5A171E15B2D /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				99A8BA1B55358A6250714C20 /* PBXTargetDependency */,
+			);
+			name = Kinema_iOS;
+			packageProductDependencies = (
+				4F60428630AC9E1846C40E21 /* KinemaUI */,
+				2ACD2F00070075B72304A9A2 /* KinemaPlugins */,
+			);
+			productName = Kinema_iOS;
+			productReference = 741E939FCF8949702B664DC6 /* Kinema_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5176039DFFE6FB1B0F80266E /* KinemaShareExtension_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4BE17C0B561BA5894CF6579B /* Build configuration list for PBXNativeTarget "KinemaShareExtension_iOS" */;
+			buildPhases = (
+				BFDE54B29F5C4B3617B4D551 /* Sources */,
+				0828D77D8296E6A3345512C7 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KinemaShareExtension_iOS;
+			packageProductDependencies = (
+				E40907D44A39E6940231F8C7 /* KinemaCore */,
+			);
+			productName = KinemaShareExtension_iOS;
+			productReference = 2BBC431D00891D1ABBE1094A /* KinemaShareExtension_iOS.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		9B36AA9FF1AAF75F629E1D3F /* Kinema_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D808F13C896358AF5BEF9430 /* Build configuration list for PBXNativeTarget "Kinema_macOS" */;
+			buildPhases = (
+				3010E0E5FCBDFEFA81D20A90 /* Sources */,
+				C5584C85B3E97CF37BFD7B8C /* Resources */,
+				EC05CE729D7CA752395A47AE /* Frameworks */,
+				F1BCC750AC02CF7D0B356D26 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C417F214B0B8C20C8B6BD660 /* PBXTargetDependency */,
+			);
+			name = Kinema_macOS;
+			packageProductDependencies = (
+				EEA69E5A5A82C84782AAF3CE /* KinemaUI */,
+				2664A978B33B299C37556931 /* KinemaPlugins */,
+			);
+			productName = Kinema_macOS;
+			productReference = CA38392ADC3B25ADB81ADD9F /* Kinema_macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DF580CC4FD798CF226D6BECB /* KinemaCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3348103A306254D43BE211A0 /* Build configuration list for PBXNativeTarget "KinemaCLI" */;
+			buildPhases = (
+				F49B7522AFE249AFAFCCA978 /* Sources */,
+				5A810B7256C6BE862AF269C8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KinemaCLI;
+			packageProductDependencies = (
+				44F5D2FCD8A480B7CB131974 /* KinemaCore */,
+			);
+			productName = KinemaCLI;
+			productReference = B12FCC4E4EBAB689396A45BC /* KinemaCLI */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CDA48CD05061E80051E8351B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					024DCE193ED9788DF06CA24C = {
+						ProvisioningStyle = Automatic;
+					};
+					15E0C2F8CD2DEEF789CBC351 = {
+						ProvisioningStyle = Automatic;
+					};
+					1EC884DE97AFEC2E15826C42 = {
+						ProvisioningStyle = Automatic;
+					};
+					5176039DFFE6FB1B0F80266E = {
+						ProvisioningStyle = Automatic;
+					};
+					9B36AA9FF1AAF75F629E1D3F = {
+						ProvisioningStyle = Automatic;
+					};
+					DF580CC4FD798CF226D6BECB = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 98C985D7299DFE80156A3C44 /* Build configuration list for PBXProject "Kinema" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2935D2DB8AC581CC676EFDD8;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4915C4C73507F7FA15AC4B6A /* XCLocalSwiftPackageReference "Packages/KinemaCore" */,
+				0F5597AD2196320C5ED48C0A /* XCLocalSwiftPackageReference "Packages/KinemaMPV" */,
+				EA10D7114311BC438C19500E /* XCLocalSwiftPackageReference "Packages/KinemaMedia" */,
+				F403533468A77A01C135875E /* XCLocalSwiftPackageReference "Packages/KinemaPlayback" */,
+				ABFDD92BEA8F51586612FE4E /* XCLocalSwiftPackageReference "Packages/KinemaPlugins" */,
+				665F3FF15FA5FDB5FE9CBCE7 /* XCLocalSwiftPackageReference "Packages/KinemaSubtitles" */,
+				680C7C29EB11B6A71F7F14B9 /* XCLocalSwiftPackageReference "Packages/KinemaUI" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7BDDBD8A2D74E76BB7B17B12 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DF580CC4FD798CF226D6BECB /* KinemaCLI */,
+				5176039DFFE6FB1B0F80266E /* KinemaShareExtension_iOS */,
+				024DCE193ED9788DF06CA24C /* KinemaShareExtension_macOS */,
+				1EC884DE97AFEC2E15826C42 /* Kinema_iOS */,
+				9B36AA9FF1AAF75F629E1D3F /* Kinema_macOS */,
+				15E0C2F8CD2DEEF789CBC351 /* Kinema_tvOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0E01AD3C4F65782FDF2A1D33 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BEF6AE8D01F8F5C0384922CB /* Assets.xcassets in Resources */,
+				CBA7025050350B9338023411 /* DefaultKeyBindings.json in Resources */,
+				6E1345040C8661F9BE08B58E /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		136CAAC0BE4C8F9D3AB5C27A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A7E08FD0CF35292CBA150DD /* Assets.xcassets in Resources */,
+				195272A0BAC1EC28CEEACEC5 /* DefaultKeyBindings.json in Resources */,
+				7FDCC73F7A2DCEE652F6D884 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C5584C85B3E97CF37BFD7B8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A2CFF2758EADD0067B605DC /* Assets.xcassets in Resources */,
+				28332507839DC0DAA82FBC17 /* DefaultKeyBindings.json in Resources */,
+				DBA670239E526D1256C6B469 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3010E0E5FCBDFEFA81D20A90 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E96FB8AB03DA4B74FADD241C /* KinemaApp.swift in Sources */,
+				E669D188C207574EECBCFA30 /* MacOSDropModifier.swift in Sources */,
+				8830A0653DD6105F1A323898 /* TopShelfContentProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3C7D0F3341BAFE0D8FE7FA23 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A82D111EB039F1977C8AB87C /* KinemaApp.swift in Sources */,
+				1645A7449C03CDAE6314938C /* MacOSDropModifier.swift in Sources */,
+				4992E6463E0AE00FDBBBA5CD /* TopShelfContentProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AF0952D7FA71A9B874C9ACA5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CED77B07ECE050177C375105 /* KinemaApp.swift in Sources */,
+				5CDC3C89CFCD081E48C541B5 /* MacOSDropModifier.swift in Sources */,
+				58C15D21B9C0D55CC7007805 /* TopShelfContentProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B05F32B1AEFD2518EF97B461 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06DEA4C5D6F18D8EDF92F4A0 /* ShareViewController+macOS.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BFDE54B29F5C4B3617B4D551 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				45126EDD8E7C8208654E96BF /* ShareViewController+iOS.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F49B7522AFE249AFAFCCA978 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CFAB17C8364F44CC63D807BE /* KinemaCLI.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		99A8BA1B55358A6250714C20 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5176039DFFE6FB1B0F80266E /* KinemaShareExtension_iOS */;
+			targetProxy = 4FA60AA13F4BF5D3D7DBB95C /* PBXContainerItemProxy */;
+		};
+		C417F214B0B8C20C8B6BD660 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 024DCE193ED9788DF06CA24C /* KinemaShareExtension_macOS */;
+			targetProxy = 8444BACA067B5FE3A41F0E0B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		00A244E8D978E2CA5B16F3B2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				INFOPLIST_FILE = Apps/KinemaShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app.share;
+				PRODUCT_NAME = KinemaShareExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0974C6847A3811C58C3EC9C8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		29B45464BDF8AD1AF94C7E6C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		326EC96B67959D0DA3756571 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		33B187920CCCC334DD18E079 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.cli;
+				PRODUCT_NAME = "kinema-cli";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		3F56FF2B91F9EB2A0B830782 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.cli;
+				PRODUCT_NAME = "kinema-cli";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		47BD82ED4297CACFB8E681D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Apps/KinemaShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app.share;
+				PRODUCT_NAME = KinemaShareExtension;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		51463887F33B8052348D5A16 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				INFOPLIST_FILE = Apps/KinemaShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app.share;
+				PRODUCT_NAME = KinemaShareExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6ACFAACAD084B515FFDD210F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		7EC2F24DD81FBC496617DF5D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Kinema Contributors";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		94F7069A3181C157E8BC64DB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Apps/KinemaShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app.share;
+				PRODUCT_NAME = KinemaShareExtension;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		ADBAE2AA2F49D02099EEA15B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		B0CF5E689A3267E3AFBBCCD8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E99187806AEB37A500D8BFAA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FCAF6587F98BEF4CC7FE676C /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Apps/Kinema/Kinema.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Apps/Kinema/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kinema;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Kinema Contributors";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.kinema.app;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		31552D1A1426637E18C54B59 /* Build configuration list for PBXNativeTarget "Kinema_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0974C6847A3811C58C3EC9C8 /* Debug */,
+				B0CF5E689A3267E3AFBBCCD8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3348103A306254D43BE211A0 /* Build configuration list for PBXNativeTarget "KinemaCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3F56FF2B91F9EB2A0B830782 /* Debug */,
+				33B187920CCCC334DD18E079 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		490D109F720CB8FE51AC0D53 /* Build configuration list for PBXNativeTarget "KinemaShareExtension_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				94F7069A3181C157E8BC64DB /* Debug */,
+				47BD82ED4297CACFB8E681D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4BE17C0B561BA5894CF6579B /* Build configuration list for PBXNativeTarget "KinemaShareExtension_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00A244E8D978E2CA5B16F3B2 /* Debug */,
+				51463887F33B8052348D5A16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		98C985D7299DFE80156A3C44 /* Build configuration list for PBXProject "Kinema" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				29B45464BDF8AD1AF94C7E6C /* Debug */,
+				326EC96B67959D0DA3756571 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C99CCC414D4A752D5F5E2F21 /* Build configuration list for PBXNativeTarget "Kinema_tvOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6ACFAACAD084B515FFDD210F /* Debug */,
+				ADBAE2AA2F49D02099EEA15B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D808F13C896358AF5BEF9430 /* Build configuration list for PBXNativeTarget "Kinema_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7EC2F24DD81FBC496617DF5D /* Debug */,
+				E99187806AEB37A500D8BFAA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0F5597AD2196320C5ED48C0A /* XCLocalSwiftPackageReference "Packages/KinemaMPV" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaMPV;
+		};
+		4915C4C73507F7FA15AC4B6A /* XCLocalSwiftPackageReference "Packages/KinemaCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaCore;
+		};
+		665F3FF15FA5FDB5FE9CBCE7 /* XCLocalSwiftPackageReference "Packages/KinemaSubtitles" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaSubtitles;
+		};
+		680C7C29EB11B6A71F7F14B9 /* XCLocalSwiftPackageReference "Packages/KinemaUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaUI;
+		};
+		ABFDD92BEA8F51586612FE4E /* XCLocalSwiftPackageReference "Packages/KinemaPlugins" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaPlugins;
+		};
+		EA10D7114311BC438C19500E /* XCLocalSwiftPackageReference "Packages/KinemaMedia" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaMedia;
+		};
+		F403533468A77A01C135875E /* XCLocalSwiftPackageReference "Packages/KinemaPlayback" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaPlayback;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2664A978B33B299C37556931 /* KinemaPlugins */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlugins;
+		};
+		283DFAF09AB900420C147F36 /* KinemaUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaUI;
+		};
+		2ACD2F00070075B72304A9A2 /* KinemaPlugins */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlugins;
+		};
+		44F5D2FCD8A480B7CB131974 /* KinemaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaCore;
+		};
+		4F60428630AC9E1846C40E21 /* KinemaUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaUI;
+		};
+		966574DFB6D3BEAC9F9388A6 /* KinemaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaCore;
+		};
+		E26103BB742D4DA98F1BFE14 /* KinemaPlugins */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlugins;
+		};
+		E40907D44A39E6940231F8C7 /* KinemaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaCore;
+		};
+		EEA69E5A5A82C84782AAF3CE /* KinemaUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = CDA48CD05061E80051E8351B /* Project object */;
+}

@@ -1,0 +1,5 @@
+#include? "Signing.xcconfig.local"
+
+// Set DEVELOPMENT_TEAM in Config/Signing.xcconfig.local
+// (copy from Signing.xcconfig.local.example).
+CODE_SIGN_STYLE = Automatic

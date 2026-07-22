@@ -1,0 +1,259 @@
+name: Kinema
+options:
+  bundleIdPrefix: io.kinema
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+    tvOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+configs:
+  Debug: debug
+  Release: release
+
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+
+packages:
+  KinemaCore:
+    path: Packages/KinemaCore
+  KinemaMPV:
+    path: Packages/KinemaMPV
+  KinemaPlayback:
+    path: Packages/KinemaPlayback
+  KinemaUI:
+    path: Packages/KinemaUI
+  KinemaSubtitles:
+    path: Packages/KinemaSubtitles
+  KinemaMedia:
+    path: Packages/KinemaMedia
+  KinemaPlugins:
+    path: Packages/KinemaPlugins
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+
+targetTemplates:
+  KinemaApp:
+    type: application
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    sources:
+      - path: Apps/Kinema
+      - path: Resources
+    dependencies:
+      - package: KinemaUI
+      - package: KinemaPlugins
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.kinema.app
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Kinema
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: Apps/Kinema/Kinema.entitlements
+    info:
+      path: Apps/Kinema/Info.plist
+      properties:
+        LSSupportsOpeningDocumentsInPlace: true
+        CFBundleURLTypes:
+          - CFBundleURLName: io.kinema.app
+            CFBundleURLSchemes:
+              - kinema
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Video
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.movie
+              - public.video
+              - public.audiovisual-content
+              - com.apple.quicktime-movie
+              - public.mpeg-4
+              - com.apple.m4v-video
+              - public.avi
+              - public.mpeg
+              - public.mpeg-2-video
+              - public.3gpp
+              - public.3gpp2
+              - org.matroska.mkv
+              - org.webmproject.webm
+              - public.mpeg-2-transport-stream
+          - CFBundleTypeName: Audio
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
+              - public.mp3
+              - public.mpeg-4-audio
+              - public.aiff-audio
+              - com.microsoft.waveform-audio
+              - org.xiph.flac
+              - public.aac-audio
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.matroska.mkv
+            UTTypeDescription: Matroska Video
+            UTTypeConformsTo:
+              - public.movie
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - mkv
+              public.mime-type:
+                - video/x-matroska
+          - UTTypeIdentifier: org.webmproject.webm
+            UTTypeDescription: WebM Video
+            UTTypeConformsTo:
+              - public.movie
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - webm
+              public.mime-type:
+                - video/webm
+          - UTTypeIdentifier: org.xiph.flac
+            UTTypeDescription: FLAC Audio
+            UTTypeConformsTo:
+              - public.audio
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - flac
+              public.mime-type:
+                - audio/flac
+
+targets:
+  Kinema_iOS:
+    templates: [KinemaApp]
+    platform: iOS
+    dependencies:
+      - target: KinemaShareExtension_iOS
+        embed: true
+    settings:
+      base:
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+  Kinema_macOS:
+    templates: [KinemaApp]
+    platform: macOS
+    dependencies:
+      - target: KinemaShareExtension_macOS
+        embed: true
+    settings:
+      base:
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Kinema Contributors"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  Kinema_tvOS:
+    templates: [KinemaApp]
+    platform: tvOS
+
+  KinemaCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - Apps/KinemaCLI
+    dependencies:
+      - package: KinemaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.kinema.cli
+        PRODUCT_NAME: kinema-cli
+
+  KinemaShareExtension_iOS:
+    type: app-extension
+    platform: iOS
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    sources:
+      - path: Apps/KinemaShareExtension
+        excludes:
+          - "**/*+macOS.swift"
+    dependencies:
+      - package: KinemaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.kinema.app.share
+        PRODUCT_NAME: KinemaShareExtension
+    info:
+      path: Apps/KinemaShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Open in Kinema
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 10
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+
+  KinemaShareExtension_macOS:
+    type: app-extension
+    platform: macOS
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    sources:
+      - path: Apps/KinemaShareExtension
+        excludes:
+          - "**/*+iOS.swift"
+    dependencies:
+      - package: KinemaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.kinema.app.share
+        PRODUCT_NAME: KinemaShareExtension
+    info:
+      path: Apps/KinemaShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Open in Kinema
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+              NSExtensionActivationSupportsMovieWithMaxCount: 10
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+
+schemes:
+  Kinema_iOS:
+    build:
+      targets:
+        Kinema_iOS: all
+        KinemaShareExtension_iOS: [build, archive]
+    run:
+      config: Debug
+      executable: Kinema_iOS
+  Kinema_macOS:
+    build:
+      targets:
+        Kinema_macOS: all
+        KinemaCLI: all
+        KinemaShareExtension_macOS: all
+    run:
+      config: Debug
+      executable: Kinema_macOS
+  Kinema_tvOS:
+    build:
+      targets:
+        Kinema_tvOS: all
+    run:
+      config: Debug
+      executable: Kinema_tvOS
+  KinemaCLI:
+    build:
+      targets:
+        KinemaCLI: all

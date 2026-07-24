@@ -32,17 +32,35 @@ enum MPVTrackList {
             let isExternal = fields["external"]?.flagValue ?? false
             let isDefault = fields["default"]?.flagValue ?? false
             let isForced = fields["forced"]?.flagValue ?? false
+            let isHearingImpaired = fields["hearing-impaired"]?.flagValue ?? false
+            let codec = fields["codec"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let mainSelection = fields["main-selection"]?.intValue
+            let isSecondarySelected = mainSelection == 1
+            let ffIndex = fields["ff-index"]?.intValue
+            let externalFilename = fields["external-filename"]?.stringValue?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let displayTitle: String
+            if title.isEmpty, let externalFilename, !externalFilename.isEmpty {
+                displayTitle = URL(fileURLWithPath: externalFilename).lastPathComponent
+            } else {
+                displayTitle = title
+            }
 
             tracks.append(
                 Track(
                     id: id,
                     kind: kind,
-                    title: title,
+                    title: displayTitle,
                     language: language?.isEmpty == true ? nil : language,
-                    isSelected: isSelected,
+                    isSelected: isSelected && !isSecondarySelected,
                     isExternal: isExternal,
                     isDefault: isDefault,
-                    isForced: isForced
+                    isForced: isForced,
+                    codec: codec?.isEmpty == true ? nil : codec,
+                    isHearingImpaired: isHearingImpaired,
+                    isSecondarySelected: isSecondarySelected,
+                    ffIndex: ffIndex,
+                    externalFilename: (externalFilename?.isEmpty == false) ? externalFilename : nil
                 )
             )
         }
@@ -51,7 +69,15 @@ enum MPVTrackList {
     }
 
     static func currentSubtitleTrackID(from handle: OpaquePointer) -> Int? {
-        if let string = getString(handle, MPVProperty.sid.rawValue) {
+        parseSID(from: handle, property: MPVProperty.sid.rawValue)
+    }
+
+    static func currentSecondarySubtitleTrackID(from handle: OpaquePointer) -> Int? {
+        parseSID(from: handle, property: MPVProperty.secondarySid.rawValue)
+    }
+
+    private static func parseSID(from handle: OpaquePointer, property: String) -> Int? {
+        if let string = getString(handle, property) {
             let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if normalized == "no" { return nil }
             if normalized == "auto" {
@@ -62,7 +88,7 @@ enum MPVTrackList {
             if let id = Int(normalized) { return id }
         }
 
-        if let id = getInt64(handle, MPVProperty.sid.rawValue) {
+        if let id = getInt64(handle, property) {
             return Int(id)
         }
 

@@ -53,6 +53,20 @@ public final class MPVController: @unchecked Sendable {
         }
         handle = mpv
 
+        do {
+            try configureEngine(options: options)
+            try completeInitialization()
+        } catch {
+            // Leave a clean slate so the next open can retry.
+            mpv_terminate_destroy(mpv)
+            handle = nil
+            isInitialized = false
+            isRunning = false
+            throw error
+        }
+    }
+
+    private func configureEngine(options: [String: String]) throws {
         #if os(macOS)
         try setOption(name: MPVOption.vo.rawValue, value: "libmpv")
         try setOption(name: "ao", value: "coreaudio")
@@ -78,7 +92,9 @@ public final class MPVController: @unchecked Sendable {
         #if os(iOS) || os(tvOS)
         let logPath = Self.mpvLogPath
         try? setOption(name: "log-file", value: logPath)
-        mpv_request_log_messages(mpv, "info")
+        if let handle {
+            mpv_request_log_messages(handle, "info")
+        }
         NSLog("Kinema: mpv log at %@", logPath)
         #endif
 
@@ -87,7 +103,13 @@ public final class MPVController: @unchecked Sendable {
             if key == MPVOption.vo.rawValue { continue }
             if key == MPVOption.hwdec.rawValue { continue }
             #endif
-            try setOption(name: key, value: value)
+            // Preference / subtitle options must not block player startup if unsupported
+            // by the bundled libmpv (e.g. secondary-sub-align-x on older builds).
+            do {
+                try setOption(name: key, value: value)
+            } catch {
+                NSLog("Kinema: skipping unsupported mpv option %@=%@ (%@)", key, value, "\(error)")
+            }
         }
 
         #if os(iOS) || os(tvOS)
@@ -99,8 +121,6 @@ public final class MPVController: @unchecked Sendable {
             try setOption(name: "hwdec", value: "videotoolbox-copy")
         }
         #endif
-
-        try completeInitialization()
     }
 
     #if os(iOS) || os(tvOS)
@@ -168,6 +188,10 @@ public final class MPVController: @unchecked Sendable {
             MPVProperty.trackList.rawValue,
             MPVProperty.chapterList.rawValue,
             MPVProperty.sid.rawValue,
+            MPVProperty.secondarySid.rawValue,
+            MPVProperty.subDelay.rawValue,
+            MPVProperty.secondarySubDelay.rawValue,
+            MPVProperty.audioDelay.rawValue,
             MPVProperty.eofReached.rawValue
         ])
 
@@ -257,34 +281,186 @@ public final class MPVController: @unchecked Sendable {
         }
     }
 
+    public func removeSubtitle(id: Int) {
+        commandQueue.async { [weak self] in
+            self?.command([MPVCommand.subRemove.rawValue, "\(id)"])
+        }
+    }
+
     public func disableSubtitles() {
         commandQueue.async { [weak self] in
             self?.command(["set", MPVProperty.sid.rawValue, "no"])
         }
     }
 
-    public func setSubtitleFontSize(_ size: Int) {
+    public func disableSecondarySubtitles() {
         commandQueue.async { [weak self] in
-            self?.command(["set", MPVOption.subFontSize.rawValue, "\(size)"])
+            self?.command(["set", MPVProperty.secondarySid.rawValue, "no"])
         }
+    }
+
+    public func selectSecondarySubtitleTrack(id: Int) {
+        commandQueue.async { [weak self] in
+            self?.command(["set", MPVProperty.secondarySid.rawValue, "\(id)"])
+        }
+    }
+
+    /// Show or hide mpv's secondary subtitle draw.
+    public func setSecondarySubtitleVisible(_ visible: Bool) {
+        setStringOption(MPVProperty.secondarySubVisibility.rawValue, visible ? "yes" : "no")
+    }
+
+    public func secondarySubtitleText() -> String {
+        guard isInitialized, !isShuttingDown else { return "" }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown else { return "" }
+            return getString(MPVProperty.secondarySubText.rawValue)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+    }
+
+    public func setSubtitleFontSize(_ size: Int) {
+        setStringOption(MPVOption.subFontSize.rawValue, "\(size)")
     }
 
     public func setSubtitleFont(_ fontName: String) {
-        commandQueue.async { [weak self] in
-            guard !fontName.isEmpty else { return }
-            self?.command(["set", MPVOption.subFont.rawValue, fontName])
-        }
+        guard !fontName.isEmpty else { return }
+        setStringOption(MPVOption.subFont.rawValue, fontName)
     }
 
     public func setSubtitleColor(_ hex: String) {
-        commandQueue.async { [weak self] in
-            self?.command(["set", MPVOption.subColor.rawValue, hex])
-        }
+        setStringOption(MPVOption.subColor.rawValue, hex)
     }
 
     public func setSubtitleCodepage(_ codepage: String) {
-        commandQueue.async { [weak self] in
-            self?.command(["set", MPVOption.subCodepage.rawValue, codepage])
+        setStringOption(MPVOption.subCodepage.rawValue, codepage)
+    }
+
+    public func setSubtitleBorderSize(_ size: Double) {
+        setStringOption(MPVOption.subBorderSize.rawValue, "\(size)")
+    }
+
+    public func setSubtitleBorderColor(_ hex: String) {
+        setStringOption(MPVOption.subBorderColor.rawValue, hex)
+    }
+
+    public func setSubtitleShadowOffset(_ offset: Double) {
+        setStringOption(MPVOption.subShadowOffset.rawValue, "\(offset)")
+    }
+
+    public func setSubtitleShadowColor(_ hex: String) {
+        setStringOption(MPVOption.subShadowColor.rawValue, hex)
+    }
+
+    public func setSubtitleBackColor(_ hex: String) {
+        setStringOption(MPVOption.subBackColor.rawValue, hex)
+    }
+
+    public func setSubtitleBold(_ bold: Bool) {
+        setStringOption(MPVOption.subBold.rawValue, bold ? "yes" : "no")
+    }
+
+    public func setSubtitleItalic(_ italic: Bool) {
+        setStringOption(MPVOption.subItalic.rawValue, italic ? "yes" : "no")
+    }
+
+    public func setSubtitlePos(_ pos: Int) {
+        setStringOption(MPVOption.subPos.rawValue, "\(pos)")
+    }
+
+    public func setSecondarySubtitlePos(_ pos: Int) {
+        setStringOption(MPVOption.secondarySubPos.rawValue, "\(pos)")
+    }
+
+    public func setSubtitleAlignX(_ align: SubtitleHorizontalAlign) {
+        setStringOption(MPVOption.subAlignX.rawValue, align.rawValue)
+    }
+
+    public func setSubtitleAlignY(_ align: SubtitleVerticalAlign) {
+        setStringOption(MPVOption.subAlignY.rawValue, align.rawValue)
+    }
+
+    public func setSecondarySubtitleAlignX(_ align: SubtitleHorizontalAlign) {
+        setStringOption(MPVOption.secondarySubAlignX.rawValue, align.rawValue)
+    }
+
+    public func setSubtitlePlacement(_ anchor: SubtitlePlacementAnchor) {
+        setSubtitleAlignX(anchor.alignX)
+        setSubtitleAlignY(anchor.alignY)
+        setSubtitlePos(anchor.verticalPos)
+    }
+
+    public func setSecondarySubtitlePlacement(_ anchor: SubtitlePlacementAnchor) {
+        setSecondarySubtitleAlignX(anchor.alignX)
+        setSecondarySubtitlePos(anchor.verticalPos)
+        // Independent L/R for secondary: ASS Alignment via force-style (shared string),
+        // applied only when secondary-sub-ass-override=force.
+        setStringOption(MPVOption.secondarySubASSOverride.rawValue, "force")
+    }
+
+    public func setSecondarySubtitleASSOverride(_ mode: String) {
+        setStringOption(MPVOption.secondarySubASSOverride.rawValue, mode)
+    }
+
+    public func setSubtitleASSOverride(_ mode: SubtitleASSOverrideMode) {
+        // Avoid `force` on primary so secondary Alignment in force-style doesn't move primary.
+        let effective = mode == .force ? SubtitleASSOverrideMode.scale : mode
+        setStringOption(MPVOption.subASSOverride.rawValue, effective.rawValue)
+    }
+
+    public func setSubtitleASSForceStyle(_ style: String) {
+        setStringOption(MPVOption.subASSForceStyle.rawValue, style)
+    }
+
+    public func setSubtitleDelay(_ delay: Double) {
+        setProperty(MPVProperty.subDelay.rawValue, double: delay)
+    }
+
+    public func setSecondarySubtitleDelay(_ delay: Double) {
+        setProperty(MPVProperty.secondarySubDelay.rawValue, double: delay)
+    }
+
+    public func setAudioDelay(_ delay: Double) {
+        setProperty(MPVProperty.audioDelay.rawValue, double: delay)
+    }
+
+    public func setSubtitleSpeed(_ speed: Double) {
+        setStringOption(MPVOption.subSpeed.rawValue, "\(speed)")
+    }
+
+    public func subtitleDelay() -> Double {
+        guard isInitialized, !isShuttingDown else { return 0 }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return 0 }
+            return getDouble(MPVProperty.subDelay.rawValue) ?? 0
+        }
+    }
+
+    public func secondarySubtitleDelay() -> Double {
+        guard isInitialized, !isShuttingDown else { return 0 }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return 0 }
+            return getDouble(MPVProperty.secondarySubDelay.rawValue) ?? 0
+        }
+    }
+
+    public func audioDelay() -> Double {
+        guard isInitialized, !isShuttingDown else { return 0 }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return 0 }
+            return getDouble(MPVProperty.audioDelay.rawValue) ?? 0
+        }
+    }
+
+    public func subtitleSpeed() -> Double {
+        guard isInitialized, !isShuttingDown else { return 1 }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return 1 }
+            if let value = getDouble(MPVOption.subSpeed.rawValue) { return value }
+            if let string = getString(MPVOption.subSpeed.rawValue), let value = Double(string) {
+                return value
+            }
+            return 1
         }
     }
 
@@ -306,6 +482,12 @@ public final class MPVController: @unchecked Sendable {
         }
     }
 
+    private func setStringOption(_ name: String, _ value: String) {
+        commandQueue.async { [weak self] in
+            self?.command(["set", name, value])
+        }
+    }
+
     public func showOSD(_ text: String) {
         commandQueue.async { [weak self] in
             self?.command([MPVCommand.showText.rawValue, text, "3000"])
@@ -314,15 +496,16 @@ public final class MPVController: @unchecked Sendable {
 
     public func trackSnapshot() -> TrackSnapshot {
         guard isInitialized, !isShuttingDown else {
-            return TrackSnapshot(tracks: [], activeSubtitleTrackID: nil)
+            return TrackSnapshot(tracks: [], activeSubtitleTrackID: nil, activeSecondarySubtitleTrackID: nil)
         }
         return commandQueue.sync {
             guard isInitialized, !isShuttingDown, let handle else {
-                return TrackSnapshot(tracks: [], activeSubtitleTrackID: nil)
+                return TrackSnapshot(tracks: [], activeSubtitleTrackID: nil, activeSecondarySubtitleTrackID: nil)
             }
             return TrackSnapshot(
                 tracks: MPVTrackList.parseTracks(from: handle),
-                activeSubtitleTrackID: MPVTrackList.currentSubtitleTrackID(from: handle)
+                activeSubtitleTrackID: MPVTrackList.currentSubtitleTrackID(from: handle),
+                activeSecondarySubtitleTrackID: MPVTrackList.currentSecondarySubtitleTrackID(from: handle)
             )
         }
     }
@@ -505,10 +688,16 @@ public enum MPVClientEvent: Sendable {
 public struct TrackSnapshot: Sendable {
     public let tracks: [Track]
     public let activeSubtitleTrackID: Int?
+    public let activeSecondarySubtitleTrackID: Int?
 
-    public init(tracks: [Track], activeSubtitleTrackID: Int?) {
+    public init(
+        tracks: [Track],
+        activeSubtitleTrackID: Int?,
+        activeSecondarySubtitleTrackID: Int? = nil
+    ) {
         self.tracks = tracks
         self.activeSubtitleTrackID = activeSubtitleTrackID
+        self.activeSecondarySubtitleTrackID = activeSecondarySubtitleTrackID
     }
 
     public var subtitleTracks: [Track] {

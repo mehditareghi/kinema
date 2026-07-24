@@ -176,6 +176,11 @@ public final class PlayerViewModel {
         case "speed-up": session.setSpeed(min(4, session.info.speed + 0.25))
         case "speed-down": session.setSpeed(max(0.25, session.info.speed - 0.25))
         case "subtitle-cycle": session.cycleSubtitle()
+        case "subtitle-delay-down": session.adjustSubtitleDelay(by: -0.1)
+        case "subtitle-delay-up": session.adjustSubtitleDelay(by: 0.1)
+        case "subtitle-bookmark-audio": session.markBookmarkAudio()
+        case "subtitle-bookmark-sub": session.markBookmarkSubtitle()
+        case "subtitle-bookmark-apply": session.applyBookmarkSync()
         #if os(macOS)
         case "fullscreen": toggleFullscreen()
         #endif

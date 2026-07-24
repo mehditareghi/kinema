@@ -27,17 +27,29 @@ public enum SubtitlePreferenceCatalog {
     public static let defaultFontID = SubtitleFontRegistry.systemDefaultID
     public static let defaultColorHex = "#FFFFFFFF"
     public static let defaultEncodingID = "utf-8"
+    public static let defaultBorderColorHex = "#FF000000"
+    public static let defaultShadowColorHex = "#80000000"
+    public static let defaultBackColorHex = "#00000000"
 
     public static let encodings: [SubtitleEncodingOption] = [
         SubtitleEncodingOption(id: "utf-8", displayName: "UTF-8"),
         SubtitleEncodingOption(id: "utf-16", displayName: "UTF-16"),
+        SubtitleEncodingOption(id: "windows-1250", displayName: "Windows-1250 (Central European)"),
+        SubtitleEncodingOption(id: "windows-1251", displayName: "Windows-1251 (Cyrillic)"),
         SubtitleEncodingOption(id: "windows-1252", displayName: "Windows-1252 (Western)"),
         SubtitleEncodingOption(id: "windows-1256", displayName: "Windows-1256 (Arabic/Persian)"),
         SubtitleEncodingOption(id: "iso-8859-1", displayName: "ISO-8859-1 (Latin-1)"),
+        SubtitleEncodingOption(id: "iso-8859-2", displayName: "ISO-8859-2 (Central European)"),
+        SubtitleEncodingOption(id: "iso-8859-5", displayName: "ISO-8859-5 (Cyrillic)"),
         SubtitleEncodingOption(id: "iso-8859-6", displayName: "ISO-8859-6 (Arabic)"),
+        SubtitleEncodingOption(id: "iso-8859-7", displayName: "ISO-8859-7 (Greek)"),
+        SubtitleEncodingOption(id: "iso-8859-8", displayName: "ISO-8859-8 (Hebrew)"),
+        SubtitleEncodingOption(id: "iso-8859-9", displayName: "ISO-8859-9 (Turkish)"),
         SubtitleEncodingOption(id: "gb18030", displayName: "GB18030 (Chinese)"),
+        SubtitleEncodingOption(id: "gbk", displayName: "GBK (Simplified Chinese)"),
         SubtitleEncodingOption(id: "big5", displayName: "Big5 (Traditional Chinese)"),
         SubtitleEncodingOption(id: "shift_jis", displayName: "Shift_JIS (Japanese)"),
+        SubtitleEncodingOption(id: "euc-jp", displayName: "EUC-JP (Japanese)"),
         SubtitleEncodingOption(id: "euc-kr", displayName: "EUC-KR (Korean)"),
         SubtitleEncodingOption(id: "koi8-r", displayName: "KOI8-R (Cyrillic)")
     ]
@@ -60,6 +72,25 @@ public struct KinemaPreferences: Sendable {
     public var hardwareDecoding: Bool
     public var musicModeEnabled: Bool
 
+    public var subtitleBorderSize: Double
+    public var subtitleBorderColorHex: String
+    public var subtitleShadowOffset: Double
+    public var subtitleShadowColorHex: String
+    public var subtitleBackColorHex: String
+    public var subtitleBold: Bool
+    public var subtitleItalic: Bool
+    public var subtitlePos: Int
+    public var secondarySubtitlePos: Int
+    public var subtitleAlignX: SubtitleHorizontalAlign
+    public var subtitleAlignY: SubtitleVerticalAlign
+    public var secondarySubtitleAlignX: SubtitleHorizontalAlign
+    public var subtitleASSOverride: SubtitleASSOverrideMode
+    public var subtitleFadeOut: Bool
+    public var preferredSubtitleLanguage: String
+    public var preferSDHSubtitles: Bool
+    public var forcedSubtitlesOnly: Bool
+    public var openSubtitlesAPIKey: String
+
     public init(
         volume: Double = 100,
         speed: Double = 1,
@@ -70,7 +101,25 @@ public struct KinemaPreferences: Sendable {
         subtitleColorHex: String = SubtitlePreferenceCatalog.defaultColorHex,
         subtitleEncodingID: String = SubtitlePreferenceCatalog.defaultEncodingID,
         hardwareDecoding: Bool = true,
-        musicModeEnabled: Bool = false
+        musicModeEnabled: Bool = false,
+        subtitleBorderSize: Double = 2,
+        subtitleBorderColorHex: String = SubtitlePreferenceCatalog.defaultBorderColorHex,
+        subtitleShadowOffset: Double = 1,
+        subtitleShadowColorHex: String = SubtitlePreferenceCatalog.defaultShadowColorHex,
+        subtitleBackColorHex: String = SubtitlePreferenceCatalog.defaultBackColorHex,
+        subtitleBold: Bool = false,
+        subtitleItalic: Bool = false,
+        subtitlePos: Int = 100,
+        secondarySubtitlePos: Int = 10,
+        subtitleAlignX: SubtitleHorizontalAlign = .center,
+        subtitleAlignY: SubtitleVerticalAlign = .bottom,
+        secondarySubtitleAlignX: SubtitleHorizontalAlign = .center,
+        subtitleASSOverride: SubtitleASSOverrideMode = .scale,
+        subtitleFadeOut: Bool = false,
+        preferredSubtitleLanguage: String = "en",
+        preferSDHSubtitles: Bool = false,
+        forcedSubtitlesOnly: Bool = false,
+        openSubtitlesAPIKey: String = ""
     ) {
         self.volume = volume
         self.speed = speed
@@ -82,6 +131,24 @@ public struct KinemaPreferences: Sendable {
         self.subtitleEncodingID = subtitleEncodingID
         self.hardwareDecoding = hardwareDecoding
         self.musicModeEnabled = musicModeEnabled
+        self.subtitleBorderSize = subtitleBorderSize
+        self.subtitleBorderColorHex = subtitleBorderColorHex
+        self.subtitleShadowOffset = subtitleShadowOffset
+        self.subtitleShadowColorHex = subtitleShadowColorHex
+        self.subtitleBackColorHex = subtitleBackColorHex
+        self.subtitleBold = subtitleBold
+        self.subtitleItalic = subtitleItalic
+        self.subtitlePos = subtitlePos
+        self.secondarySubtitlePos = secondarySubtitlePos
+        self.subtitleAlignX = subtitleAlignX
+        self.subtitleAlignY = subtitleAlignY
+        self.secondarySubtitleAlignX = secondarySubtitleAlignX
+        self.subtitleASSOverride = subtitleASSOverride
+        self.subtitleFadeOut = subtitleFadeOut
+        self.preferredSubtitleLanguage = preferredSubtitleLanguage
+        self.preferSDHSubtitles = preferSDHSubtitles
+        self.forcedSubtitlesOnly = forcedSubtitlesOnly
+        self.openSubtitlesAPIKey = openSubtitlesAPIKey
     }
 }
 
@@ -102,6 +169,24 @@ public final class PreferencesStore {
         static let subtitleEncodingID = "kinema.subtitleEncodingID"
         static let hardwareDecoding = "kinema.hardwareDecoding"
         static let musicModeEnabled = "kinema.musicModeEnabled"
+        static let subtitleBorderSize = "kinema.subtitleBorderSize"
+        static let subtitleBorderColorHex = "kinema.subtitleBorderColorHex"
+        static let subtitleShadowOffset = "kinema.subtitleShadowOffset"
+        static let subtitleShadowColorHex = "kinema.subtitleShadowColorHex"
+        static let subtitleBackColorHex = "kinema.subtitleBackColorHex"
+        static let subtitleBold = "kinema.subtitleBold"
+        static let subtitleItalic = "kinema.subtitleItalic"
+        static let subtitlePos = "kinema.subtitlePos"
+        static let secondarySubtitlePos = "kinema.secondarySubtitlePos"
+        static let subtitleAlignX = "kinema.subtitleAlignX"
+        static let subtitleAlignY = "kinema.subtitleAlignY"
+        static let secondarySubtitleAlignX = "kinema.secondarySubtitleAlignX"
+        static let subtitleASSOverride = "kinema.subtitleASSOverride"
+        static let subtitleFadeOut = "kinema.subtitleFadeOut"
+        static let preferredSubtitleLanguage = "kinema.preferredSubtitleLanguage"
+        static let preferSDHSubtitles = "kinema.preferSDHSubtitles"
+        static let forcedSubtitlesOnly = "kinema.forcedSubtitlesOnly"
+        static let openSubtitlesAPIKey = "kinema.openSubtitlesAPIKey"
     }
 
     public var preferences: KinemaPreferences {
@@ -121,7 +206,25 @@ public final class PreferencesStore {
             subtitleColorHex: defaults.string(forKey: Keys.subtitleColorHex) ?? SubtitlePreferenceCatalog.defaultColorHex,
             subtitleEncodingID: defaults.string(forKey: Keys.subtitleEncodingID) ?? SubtitlePreferenceCatalog.defaultEncodingID,
             hardwareDecoding: defaults.object(forKey: Keys.hardwareDecoding) as? Bool ?? true,
-            musicModeEnabled: defaults.object(forKey: Keys.musicModeEnabled) as? Bool ?? false
+            musicModeEnabled: defaults.object(forKey: Keys.musicModeEnabled) as? Bool ?? false,
+            subtitleBorderSize: defaults.object(forKey: Keys.subtitleBorderSize) as? Double ?? 2,
+            subtitleBorderColorHex: defaults.string(forKey: Keys.subtitleBorderColorHex) ?? SubtitlePreferenceCatalog.defaultBorderColorHex,
+            subtitleShadowOffset: defaults.object(forKey: Keys.subtitleShadowOffset) as? Double ?? 1,
+            subtitleShadowColorHex: defaults.string(forKey: Keys.subtitleShadowColorHex) ?? SubtitlePreferenceCatalog.defaultShadowColorHex,
+            subtitleBackColorHex: defaults.string(forKey: Keys.subtitleBackColorHex) ?? SubtitlePreferenceCatalog.defaultBackColorHex,
+            subtitleBold: defaults.object(forKey: Keys.subtitleBold) as? Bool ?? false,
+            subtitleItalic: defaults.object(forKey: Keys.subtitleItalic) as? Bool ?? false,
+            subtitlePos: defaults.object(forKey: Keys.subtitlePos) as? Int ?? 100,
+            secondarySubtitlePos: defaults.object(forKey: Keys.secondarySubtitlePos) as? Int ?? 10,
+            subtitleAlignX: SubtitleHorizontalAlign(rawValue: defaults.string(forKey: Keys.subtitleAlignX) ?? "center") ?? .center,
+            subtitleAlignY: SubtitleVerticalAlign(rawValue: defaults.string(forKey: Keys.subtitleAlignY) ?? "bottom") ?? .bottom,
+            secondarySubtitleAlignX: SubtitleHorizontalAlign(rawValue: defaults.string(forKey: Keys.secondarySubtitleAlignX) ?? "center") ?? .center,
+            subtitleASSOverride: SubtitleASSOverrideMode(rawValue: defaults.string(forKey: Keys.subtitleASSOverride) ?? "scale") ?? .scale,
+            subtitleFadeOut: defaults.object(forKey: Keys.subtitleFadeOut) as? Bool ?? false,
+            preferredSubtitleLanguage: defaults.string(forKey: Keys.preferredSubtitleLanguage) ?? "en",
+            preferSDHSubtitles: defaults.object(forKey: Keys.preferSDHSubtitles) as? Bool ?? false,
+            forcedSubtitlesOnly: defaults.object(forKey: Keys.forcedSubtitlesOnly) as? Bool ?? false,
+            openSubtitlesAPIKey: defaults.string(forKey: Keys.openSubtitlesAPIKey) ?? ""
         )
     }
 
@@ -136,23 +239,59 @@ public final class PreferencesStore {
         defaults.set(preferences.subtitleEncodingID, forKey: Keys.subtitleEncodingID)
         defaults.set(preferences.hardwareDecoding, forKey: Keys.hardwareDecoding)
         defaults.set(preferences.musicModeEnabled, forKey: Keys.musicModeEnabled)
+        defaults.set(preferences.subtitleBorderSize, forKey: Keys.subtitleBorderSize)
+        defaults.set(preferences.subtitleBorderColorHex, forKey: Keys.subtitleBorderColorHex)
+        defaults.set(preferences.subtitleShadowOffset, forKey: Keys.subtitleShadowOffset)
+        defaults.set(preferences.subtitleShadowColorHex, forKey: Keys.subtitleShadowColorHex)
+        defaults.set(preferences.subtitleBackColorHex, forKey: Keys.subtitleBackColorHex)
+        defaults.set(preferences.subtitleBold, forKey: Keys.subtitleBold)
+        defaults.set(preferences.subtitleItalic, forKey: Keys.subtitleItalic)
+        defaults.set(preferences.subtitlePos, forKey: Keys.subtitlePos)
+        defaults.set(preferences.secondarySubtitlePos, forKey: Keys.secondarySubtitlePos)
+        defaults.set(preferences.subtitleAlignX.rawValue, forKey: Keys.subtitleAlignX)
+        defaults.set(preferences.subtitleAlignY.rawValue, forKey: Keys.subtitleAlignY)
+        defaults.set(preferences.secondarySubtitleAlignX.rawValue, forKey: Keys.secondarySubtitleAlignX)
+        defaults.set(preferences.subtitleASSOverride.rawValue, forKey: Keys.subtitleASSOverride)
+        defaults.set(preferences.subtitleFadeOut, forKey: Keys.subtitleFadeOut)
+        defaults.set(preferences.preferredSubtitleLanguage, forKey: Keys.preferredSubtitleLanguage)
+        defaults.set(preferences.preferSDHSubtitles, forKey: Keys.preferSDHSubtitles)
+        defaults.set(preferences.forcedSubtitlesOnly, forKey: Keys.forcedSubtitlesOnly)
+        defaults.set(preferences.openSubtitlesAPIKey, forKey: Keys.openSubtitlesAPIKey)
     }
 
     public func mpvOptions() -> [String: String] {
         let fontsDir = SubtitleFontRegistry.prepare()
         let selectedFont = SubtitleFontRegistry.resolveStoredFontSelection(preferences.subtitleFontID)
+        let p = preferences
 
         var options: [String: String] = [
-            "volume": "\(Int(preferences.volume))",
-            "speed": "\(preferences.speed)",
-            "sub-font-size": "\(preferences.subtitleFontSize)",
-            "sub-color": normalizedSubtitleColorHex(preferences.subtitleColorHex),
-            "sub-border-size": "2",
-            "sub-shadow-offset": "1",
-            "sub-codepage": SubtitlePreferenceCatalog.encoding(id: preferences.subtitleEncodingID).id,
+            "volume": "\(Int(p.volume))",
+            "speed": "\(p.speed)",
+            "sub-font-size": "\(p.subtitleFontSize)",
+            "sub-color": normalizedSubtitleColorHex(p.subtitleColorHex),
+            "sub-border-size": "\(p.subtitleBorderSize)",
+            "sub-border-color": normalizedSubtitleColorHex(p.subtitleBorderColorHex),
+            "sub-shadow-offset": "\(p.subtitleShadowOffset)",
+            "sub-shadow-color": normalizedSubtitleColorHex(p.subtitleShadowColorHex),
+            "sub-back-color": normalizedSubtitleColorHex(p.subtitleBackColorHex),
+            "sub-bold": p.subtitleBold ? "yes" : "no",
+            "sub-italic": p.subtitleItalic ? "yes" : "no",
+            "sub-pos": "\(p.subtitlePos)",
+            "secondary-sub-pos": "\(p.secondarySubtitlePos)",
+            "sub-align-x": p.subtitleAlignX.rawValue,
+            "sub-align-y": p.subtitleAlignY.rawValue,
+            "sub-ass-override": p.subtitleASSOverride == .force ? "scale" : p.subtitleASSOverride.rawValue,
+            "sub-codepage": SubtitlePreferenceCatalog.encoding(id: p.subtitleEncodingID).id,
             "keep-open": "yes",
             "hr-seek": "yes"
         ]
+
+        // Do NOT set secondary-sub-align-x / secondary-sub-ass-override here —
+        // older bundled libmpv rejects them and used to break startup.
+
+        if let forceStyle = SubtitleASSForceStyleBuilder.build(from: p) {
+            options["sub-ass-force-style"] = forceStyle
+        }
 
         if let fontsDir {
             options["sub-fonts-dir"] = fontsDir.path
@@ -171,6 +310,53 @@ public final class PreferencesStore {
     }
 }
 
+public enum SubtitleASSForceStyleBuilder {
+    /// Builds ASS force-style from live prefs.
+    /// Never sets Alignment — that stays in the script (needed for dual L/R).
+    public static func build(
+        from preferences: KinemaPreferences,
+        alwaysApplyLook: Bool = false
+    ) -> String? {
+        let mode = preferences.subtitleASSOverride
+        let applyLook = alwaysApplyLook
+            || mode == .force
+            || mode == .yes
+            || mode == .scale
+        guard applyLook else { return nil }
+
+        var parts: [String] = []
+        let font = SubtitleFontRegistry.resolveStoredFontSelection(preferences.subtitleFontID)
+        if !font.mpvFontName.isEmpty {
+            parts.append("Fontname=\(font.mpvFontName)")
+        }
+        parts.append("Fontsize=\(preferences.subtitleFontSize)")
+        parts.append("PrimaryColour=\(assColor(from: preferences.subtitleColorHex))")
+        parts.append("OutlineColour=\(assColor(from: preferences.subtitleBorderColorHex))")
+        parts.append("BackColour=\(assColor(from: preferences.subtitleBackColorHex))")
+        parts.append("Bold=\(preferences.subtitleBold ? -1 : 0)")
+        parts.append("Italic=\(preferences.subtitleItalic ? -1 : 0)")
+        parts.append("Outline=\(String(format: "%.2f", max(0, preferences.subtitleBorderSize)))")
+        parts.append("Shadow=\(String(format: "%.2f", max(0, preferences.subtitleShadowOffset)))")
+        let backOpacity = subtitleColorOpacity(normalizedSubtitleColorHex(preferences.subtitleBackColorHex))
+        parts.append("BorderStyle=\(backOpacity > 0.04 ? 3 : 1)")
+        if preferences.subtitleFadeOut {
+            parts.append("Blur=0.4")
+        }
+        return parts.joined(separator: ",")
+    }
+
+    private static func assColor(from hex: String) -> String {
+        var value = normalizedSubtitleColorHex(hex)
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 8 else { return "&H00FFFFFF" }
+        let aa = String(value.prefix(2))
+        let rr = String(value.dropFirst(2).prefix(2))
+        let gg = String(value.dropFirst(4).prefix(2))
+        let bb = String(value.dropFirst(6).prefix(2))
+        return "&H\(aa)\(bb)\(gg)\(rr)"
+    }
+}
+
 public func normalizedSubtitleColorHex(_ hex: String) -> String {
     var value = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     if value.hasPrefix("#") {
@@ -184,4 +370,25 @@ public func normalizedSubtitleColorHex(_ hex: String) -> String {
     default:
         return SubtitlePreferenceCatalog.defaultColorHex
     }
+}
+
+public func subtitleColorOpacity(_ hex: String) -> Double {
+    var value = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    if value.hasPrefix("#") { value.removeFirst() }
+    guard value.count == 8, let alpha = Int(value.prefix(2), radix: 16) else { return 1 }
+    return Double(alpha) / 255.0
+}
+
+public func applyingSubtitleOpacity(_ hex: String, opacity: Double) -> String {
+    var value = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    if value.hasPrefix("#") { value.removeFirst() }
+    let rgb: String
+    switch value.count {
+    case 6: rgb = value
+    case 8: rgb = String(value.suffix(6))
+    default: rgb = "FFFFFF"
+    }
+    let clamped = max(0, min(1, opacity))
+    let alpha = Int((clamped * 255).rounded())
+    return String(format: "#%02X%@", alpha, rgb)
 }

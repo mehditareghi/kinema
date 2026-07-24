@@ -65,6 +65,29 @@ public struct SettingsView: View {
                     isOn: binding(\.autoLoadSubtitles)
                 )
 
+                SettingsToggleRow(
+                    title: "Prefer SDH / CC",
+                    subtitle: "Prefer hearing-impaired caption tracks when available.",
+                    isOn: binding(\.preferSDHSubtitles)
+                )
+
+                SettingsToggleRow(
+                    title: "Forced only",
+                    subtitle: "Prefer forced subtitle tracks for auto-select.",
+                    isOn: binding(\.forcedSubtitlesOnly)
+                )
+
+                HStack {
+                    Text("Preferred language")
+                    Spacer()
+                    TextField("en", text: binding(\.preferredSubtitleLanguage))
+                        .multilineTextAlignment(.trailing)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .frame(maxWidth: 120)
+                }
+
                 SettingsMenuRow(
                     title: KinemaCopy.captionsFont,
                     value: selectedFontDisplayName
@@ -81,6 +104,21 @@ public struct SettingsView: View {
                     hex: binding(\.subtitleColorHex)
                 )
 
+                SettingsColorSwatchRow(
+                    title: "Outline color",
+                    hex: binding(\.subtitleBorderColorHex)
+                )
+
+                SettingsColorSwatchRow(
+                    title: "Shadow color",
+                    hex: binding(\.subtitleShadowColorHex)
+                )
+
+                SettingsColorSwatchRow(
+                    title: "Backdrop color",
+                    hex: binding(\.subtitleBackColorHex)
+                )
+
                 SettingsSliderRow(
                     title: KinemaCopy.captionsSize,
                     valueText: "\(preferences.preferences.subtitleFontSize)",
@@ -92,6 +130,75 @@ public struct SettingsView: View {
                     step: 1
                 )
 
+                SettingsSliderRow(
+                    title: "Outline size",
+                    valueText: String(format: "%.1f", preferences.preferences.subtitleBorderSize),
+                    value: binding(\.subtitleBorderSize),
+                    range: 0...8,
+                    step: 0.5
+                )
+
+                SettingsSliderRow(
+                    title: "Shadow offset",
+                    valueText: String(format: "%.1f", preferences.preferences.subtitleShadowOffset),
+                    value: binding(\.subtitleShadowOffset),
+                    range: 0...8,
+                    step: 0.5
+                )
+
+                SubtitlePlacementGrid(
+                    title: "Placement",
+                    selection: SubtitlePlacementAnchor.nearest(
+                        alignX: preferences.preferences.subtitleAlignX,
+                        verticalPos: preferences.preferences.subtitlePos
+                    )
+                ) { anchor in
+                    preferences.preferences.subtitleAlignX = anchor.alignX
+                    preferences.preferences.subtitleAlignY = anchor.alignY
+                    preferences.preferences.subtitlePos = anchor.verticalPos
+                    preferences.preferences.secondarySubtitleAlignX = anchor.alignX
+                }
+
+                SettingsSliderRow(
+                    title: "Vertical fine-tune",
+                    valueText: "\(preferences.preferences.subtitlePos)",
+                    value: Binding(
+                        get: { Double(preferences.preferences.subtitlePos) },
+                        set: { preferences.preferences.subtitlePos = Int($0.rounded()) }
+                    ),
+                    range: 0...100,
+                    step: 1
+                )
+
+                SettingsMenuRow(
+                    title: "ASS override",
+                    value: preferences.preferences.subtitleASSOverride.displayName
+                ) {
+                    ForEach(SubtitleASSOverrideMode.allCases) { mode in
+                        Button(mode.displayName) {
+                            preferences.preferences.subtitleASSOverride = mode
+                        }
+                    }
+                }
+
+                SettingsToggleRow(
+                    title: "Bold",
+                    subtitle: "Prefer bold text styling.",
+                    isOn: binding(\.subtitleBold)
+                )
+
+                SettingsToggleRow(
+                    title: "Italic",
+                    subtitle: "Prefer italic text styling.",
+                    isOn: binding(\.subtitleItalic)
+                )
+
+                SettingsToggleRow(
+                    title: "Fade-out",
+                    subtitle: "Soft ASS blur approximation when force styles are enabled.",
+                    isOn: binding(\.subtitleFadeOut)
+                )
+
                 SettingsMenuRow(
                     title: KinemaCopy.captionsEncoding,
                     value: selectedEncodingDisplayName
@@ -101,6 +208,17 @@ public struct SettingsView: View {
                             preferences.preferences.subtitleEncodingID = encoding.id
                         }
                     }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("OpenSubtitles API key")
+                    SecureField("Optional Api-Key", text: binding(\.openSubtitlesAPIKey))
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                    Text("Required to download online subtitles.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -223,21 +341,10 @@ private struct SettingsMenuRow<Content: View>: View {
                 HStack(spacing: 6) {
                     Text(value)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(KinemaTheme.accent)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    KinemaTheme.accent.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(KinemaTheme.accent.opacity(0.22), lineWidth: 0.5)
                 }
             }
             .buttonStyle(.plain)
@@ -250,13 +357,15 @@ private struct SettingsColorSwatchRow: View {
     @Binding var hex: String
 
     private let presets: [(name: String, hex: String)] = [
+        ("Clear", "#00000000"),
         ("White", "#FFFFFFFF"),
         ("Yellow", "#FFFFFF00"),
         ("Cyan", "#FF00FFFF"),
         ("Lime", "#FF00FF00"),
         ("Orange", "#FFFFAA00"),
         ("Red", "#FFFF5555"),
-        ("Gray", "#FFB0B0B0")
+        ("Gray", "#FFB0B0B0"),
+        ("Black", "#FF000000")
     ]
 
     var body: some View {

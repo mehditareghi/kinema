@@ -53,5 +53,30 @@
     "action": "subtitle-cycle",
     "keys": ["v"],
     "description": "Cycle subtitles"
+  },
+  {
+    "action": "subtitle-delay-down",
+    "keys": ["g"],
+    "description": "Subtitle delay −0.1s"
+  },
+  {
+    "action": "subtitle-delay-up",
+    "keys": ["h"],
+    "description": "Subtitle delay +0.1s"
+  },
+  {
+    "action": "subtitle-bookmark-audio",
+    "keys": ["z"],
+    "description": "Mark audio for subtitle sync"
+  },
+  {
+    "action": "subtitle-bookmark-sub",
+    "keys": ["x"],
+    "description": "Mark subtitle for sync"
+  },
+  {
+    "action": "subtitle-bookmark-apply",
+    "keys": ["c"],
+    "description": "Apply subtitle bookmark sync"
   }
 ]

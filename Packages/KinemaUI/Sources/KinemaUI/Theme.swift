@@ -206,3 +206,73 @@ public struct KinemaSheetHero: View {
         }
     }
 }
+
+/// 3×3 screen placement picker for primary/secondary subtitles.
+public struct SubtitlePlacementGrid: View {
+    let title: String
+    let selection: SubtitlePlacementAnchor
+    let onSelect: (SubtitlePlacementAnchor) -> Void
+
+    private let rows: [[SubtitlePlacementAnchor]] = [
+        [.topLeft, .topCenter, .topRight],
+        [.centerLeft, .center, .centerRight],
+        [.bottomLeft, .bottomCenter, .bottomRight]
+    ]
+
+    public init(
+        title: String,
+        selection: SubtitlePlacementAnchor,
+        onSelect: @escaping (SubtitlePlacementAnchor) -> Void
+    ) {
+        self.title = title
+        self.selection = selection
+        self.onSelect = onSelect
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(selection.accessibilityLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 6) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 6) {
+                        ForEach(row) { anchor in
+                            let isSelected = selection == anchor
+                            Button {
+                                onSelect(anchor)
+                            } label: {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(isSelected ? KinemaTheme.accent.opacity(0.22) : Color.primary.opacity(0.05))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
+                                    .overlay {
+                                        Image(systemName: "circle.fill")
+                                            .font(.system(size: isSelected ? 7 : 5))
+                                            .foregroundStyle(isSelected ? KinemaTheme.accent : Color.secondary.opacity(0.55))
+                                    }
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .strokeBorder(
+                                                isSelected ? KinemaTheme.accent.opacity(0.45) : Color.primary.opacity(0.08),
+                                                lineWidth: isSelected ? 1.5 : 0.5
+                                            )
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(anchor.accessibilityLabel)
+                        }
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+}

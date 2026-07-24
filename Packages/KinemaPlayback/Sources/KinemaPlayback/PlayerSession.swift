@@ -15,6 +15,22 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var tracks: [Track] = []
     public private(set) var chapters: [Chapter] = []
     public private(set) var activeSubtitleTrackID: Int?
+    public private(set) var activeSecondarySubtitleTrackID: Int?
+
+    /// Runtime sync values (not persisted globally — per-track where possible).
+    public private(set) var subtitleDelay: Double = 0
+    public private(set) var secondarySubtitleDelay: Double = 0
+    public private(set) var audioDelay: Double = 0
+    public private(set) var subtitleSpeed: Double = 1
+    public var bookmarkAudioMark: TimeInterval?
+    public var bookmarkSubtitleMark: TimeInterval?
+    public var syncTarget: SubtitleSyncTarget = .primary
+
+    public private(set) var rememberedSubtitles: [ManualSubtitleAssociation] = []
+
+    /// Source file for each loaded external track id.
+    private var externalSourceByTrackID: [Int: URL] = [:]
+    private var pendingExternalSourceURL: URL?
 
     public var subtitleTracks: [Track] {
         tracks.filter { $0.kind == .subtitle }
@@ -35,6 +51,19 @@ public final class PlayerSession: PlaybackEngine {
     public var activeSubtitleTrack: Track? {
         guard let activeSubtitleTrackID else { return nil }
         return subtitleTracks.first(where: { $0.id == activeSubtitleTrackID })
+    }
+
+    public var activeSecondarySubtitleTrack: Track? {
+        guard let activeSecondarySubtitleTrackID else { return nil }
+        return subtitleTracks.first(where: { $0.id == activeSecondarySubtitleTrackID })
+    }
+
+    public func isPrimaryTrackSelected(_ trackID: Int) -> Bool {
+        activeSubtitleTrackID == trackID
+    }
+
+    public func isSecondaryTrackSelected(_ trackID: Int) -> Bool {
+        activeSecondarySubtitleTrackID == trackID
     }
 
     private let controller = MPVController()
@@ -97,6 +126,17 @@ public final class PlayerSession: PlaybackEngine {
         tracks = []
         chapters = []
         activeSubtitleTrackID = nil
+        activeSecondarySubtitleTrackID = nil
+        subtitleDelay = 0
+        secondarySubtitleDelay = 0
+        audioDelay = 0
+        subtitleSpeed = 1
+        bookmarkAudioMark = nil
+        bookmarkSubtitleMark = nil
+        syncTarget = .primary
+        rememberedSubtitles = []
+        externalSourceByTrackID = [:]
+        pendingExternalSourceURL = nil
         info = PlaybackInfo()
         state = .idle
         #if os(iOS) || os(tvOS)
@@ -172,6 +212,14 @@ public final class PlayerSession: PlaybackEngine {
 
         // Mount the player view before starting playback on iOS.
         currentItem = resolvedItem
+        tracks = []
+        chapters = []
+        activeSubtitleTrackID = nil
+        activeSecondarySubtitleTrackID = nil
+        externalSourceByTrackID = [:]
+        pendingExternalSourceURL = nil
+        subtitleDelay = 0
+        secondarySubtitleDelay = 0
         state = .starting
         EventBus.shared.emit(.stateChanged(state))
 
@@ -429,23 +477,70 @@ public final class PlayerSession: PlaybackEngine {
         loadExternalSubtitle(url: url)
     }
 
-    public func loadExternalSubtitle(url: URL) {
+    public func loadExternalSubtitle(url: URL, encodingID: String? = nil, remember: Bool = false) {
+        if let encodingID {
+            setSubtitleEncoding(encodingID)
+        }
+        pendingExternalSourceURL = url
         controller.addSubtitle(url: url)
+        if remember, let media = currentItem?.url {
+            _ = SubtitleAssociationStore.add(
+                for: media,
+                subtitleURL: url,
+                encodingID: encodingID ?? PreferencesStore.shared.preferences.subtitleEncodingID
+            )
+            refreshRememberedSubtitles()
+        }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             refreshTracks(force: true)
+            applyStoredDelayIfNeeded(for: url)
             if let track = activeSubtitleTrack {
                 controller.showOSD("Subtitles: \(SubtitleLabels.displayName(for: track))")
             } else {
                 controller.showOSD("Subtitles loaded")
             }
+            persistSubtitleSession()
         }
     }
 
-    public func disableSubtitles() {
-        controller.disableSubtitles()
+    public func loadExternalSubtitles(urls: [URL], encodingID: String? = nil, remember: Bool = true) {
+        for url in urls {
+            loadExternalSubtitle(url: url, encodingID: encodingID, remember: remember)
+        }
+    }
+
+    public func removeRememberedSubtitle(_ association: ManualSubtitleAssociation) {
+        guard let media = currentItem?.url else { return }
+        SubtitleAssociationStore.remove(for: media, associationID: association.id)
+        refreshRememberedSubtitles()
+
+        if let trackID = externalSourceByTrackID.first(where: { $0.value.path == association.path })?.key {
+            if activeSubtitleTrackID == trackID { disableSubtitles() }
+            if activeSecondarySubtitleTrackID == trackID { disableSecondarySubtitles() }
+            controller.removeSubtitle(id: trackID)
+            externalSourceByTrackID.removeValue(forKey: trackID)
+        }
         refreshTracks(force: true)
-        controller.showOSD("Subtitles off")
+        controller.showOSD("Removed \(association.displayName)")
+    }
+
+    public func refreshRememberedSubtitles() {
+        guard let media = currentItem?.url else {
+            rememberedSubtitles = []
+            return
+        }
+        rememberedSubtitles = SubtitleAssociationStore.associations(for: media)
+    }
+
+    private func applyStoredDelayIfNeeded(for url: URL) {
+        guard let media = currentItem?.url else { return }
+        if let match = SubtitleAssociationStore.associations(for: media).first(where: { $0.path == url.path }),
+           abs(match.delay) > 0.001 {
+            // Apply after track settles as primary delay if this became primary.
+            subtitleDelay = match.delay
+            controller.setSubtitleDelay(match.delay)
+        }
     }
 
     public func selectSubtitleTrack(id: Int) {
@@ -454,15 +549,481 @@ public final class PlayerSession: PlaybackEngine {
         if let track = activeSubtitleTrack {
             controller.showOSD("Subtitles: \(SubtitleLabels.displayName(for: track))")
         }
+        persistSubtitleSession()
+    }
+
+    public func selectSecondarySubtitleTrack(id: Int) {
+        controller.selectSecondarySubtitleTrack(id: id)
+        controller.setSecondarySubtitleVisible(true)
+        refreshTracks(force: true)
+        refreshStackedSubtitlePositions()
+        if let track = activeSecondarySubtitleTrack {
+            controller.showOSD("Secondary: \(SubtitleLabels.displayName(for: track))")
+        }
+        persistSubtitleSession()
+    }
+
+    public func disableSubtitles() {
+        controller.disableSubtitles()
+        refreshTracks(force: true)
+        persistSubtitleSession()
+        controller.showOSD("Subtitles off")
+    }
+
+    public func disableSecondarySubtitles() {
+        controller.disableSecondarySubtitles()
+        refreshTracks(force: true)
+        // Dual fit may have lifted primary — put it back to the user's placement.
+        refreshStackedSubtitlePositions()
+        persistSubtitleSession()
+        controller.showOSD("Secondary subtitles off")
     }
 
     public func setSubtitleFontSize(_ size: Int) {
         controller.setSubtitleFontSize(size)
         PreferencesStore.shared.preferences.subtitleFontSize = size
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleFontID(_ fontID: String) {
+        PreferencesStore.shared.preferences.subtitleFontID = fontID
+        let font = SubtitleFontRegistry.resolveStoredFontSelection(fontID)
+        if !font.mpvFontName.isEmpty {
+            controller.setSubtitleFont(font.mpvFontName)
+        }
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleColorHex(_ hex: String) {
+        let normalized = normalizedSubtitleColorHex(hex)
+        PreferencesStore.shared.preferences.subtitleColorHex = normalized
+        controller.setSubtitleColor(normalized)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleEncoding(_ encodingID: String) {
+        PreferencesStore.shared.preferences.subtitleEncodingID = encodingID
+        controller.setSubtitleCodepage(SubtitlePreferenceCatalog.encoding(id: encodingID).id)
+    }
+
+    public func setSubtitleBorderSize(_ size: Double) {
+        PreferencesStore.shared.preferences.subtitleBorderSize = size
+        controller.setSubtitleBorderSize(size)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleBorderColorHex(_ hex: String) {
+        let normalized = normalizedSubtitleColorHex(hex)
+        PreferencesStore.shared.preferences.subtitleBorderColorHex = normalized
+        controller.setSubtitleBorderColor(normalized)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleShadowOffset(_ offset: Double) {
+        PreferencesStore.shared.preferences.subtitleShadowOffset = offset
+        controller.setSubtitleShadowOffset(offset)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleShadowColorHex(_ hex: String) {
+        let normalized = normalizedSubtitleColorHex(hex)
+        PreferencesStore.shared.preferences.subtitleShadowColorHex = normalized
+        controller.setSubtitleShadowColor(normalized)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleBackColorHex(_ hex: String) {
+        let normalized = normalizedSubtitleColorHex(hex)
+        PreferencesStore.shared.preferences.subtitleBackColorHex = normalized
+        controller.setSubtitleBackColor(normalized)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleBold(_ bold: Bool) {
+        PreferencesStore.shared.preferences.subtitleBold = bold
+        controller.setSubtitleBold(bold)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleItalic(_ italic: Bool) {
+        PreferencesStore.shared.preferences.subtitleItalic = italic
+        controller.setSubtitleItalic(italic)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitlePos(_ pos: Int) {
+        PreferencesStore.shared.preferences.subtitlePos = pos
+        controller.setSubtitlePos(pos)
+        refreshStackedSubtitlePositions()
+        persistSubtitleSession()
+    }
+
+    public func setSecondarySubtitlePos(_ pos: Int) {
+        // Dual subs are auto-stacked from primary placement; keep API for callers/prefs sync.
+        PreferencesStore.shared.preferences.secondarySubtitlePos = pos
+        controller.setSecondarySubtitlePos(pos)
+        persistSubtitleSession()
+    }
+
+    public func setSubtitleAlignX(_ align: SubtitleHorizontalAlign) {
+        PreferencesStore.shared.preferences.subtitleAlignX = align
+        PreferencesStore.shared.preferences.secondarySubtitleAlignX = align
+        controller.setSubtitleAlignX(align)
+        persistSubtitleSession()
+    }
+
+    public func setSubtitleAlignY(_ align: SubtitleVerticalAlign) {
+        PreferencesStore.shared.preferences.subtitleAlignY = align
+        controller.setSubtitleAlignY(align)
+        persistSubtitleSession()
+    }
+
+    public func setSecondarySubtitleAlignX(_ align: SubtitleHorizontalAlign) {
+        // Dual subs share horizontal align in libmpv; keep prefs in sync.
+        PreferencesStore.shared.preferences.secondarySubtitleAlignX = align
+        PreferencesStore.shared.preferences.subtitleAlignX = align
+        controller.setSubtitleAlignX(align)
+        persistSubtitleSession()
+    }
+
+    public func setSubtitlePlacement(_ anchor: SubtitlePlacementAnchor) {
+        PreferencesStore.shared.preferences.subtitleAlignX = anchor.alignX
+        PreferencesStore.shared.preferences.subtitleAlignY = anchor.alignY
+        PreferencesStore.shared.preferences.subtitlePos = anchor.verticalPos
+        PreferencesStore.shared.preferences.secondarySubtitleAlignX = anchor.alignX
+        controller.setSubtitleAlignX(anchor.alignX)
+        controller.setSubtitleAlignY(anchor.alignY)
+        controller.setSubtitlePos(anchor.verticalPos)
+        refreshStackedSubtitlePositions()
+        persistSubtitleSession()
+    }
+
+    public func setSecondarySubtitlePlacement(_ anchor: SubtitlePlacementAnchor) {
+        // Same stack band — secondary only adjusts vertical stack slot via pos.
+        setSubtitlePlacement(anchor)
+    }
+
+    public func setSubtitleDelay(_ delay: Double) {
+        applyDelay(delay, to: syncTarget)
+    }
+
+    public func adjustSubtitleDelay(by delta: Double) {
+        switch syncTarget {
+        case .primary:
+            applyDelay(subtitleDelay + delta, to: .primary)
+        case .secondary:
+            applyDelay(secondarySubtitleDelay + delta, to: .secondary)
+        case .both:
+            applyDelay(subtitleDelay + delta, to: .primary)
+            applyDelay(secondarySubtitleDelay + delta, to: .secondary)
+        }
+    }
+
+    public func setSecondarySubtitleDelay(_ delay: Double) {
+        applyDelay(delay, to: .secondary)
+    }
+
+    private func applyDelay(_ delay: Double, to target: SubtitleSyncTarget) {
+        switch target {
+        case .primary:
+            subtitleDelay = delay
+            if let id = activeSubtitleTrackID {
+                persistDelay(delay, for: externalSourceByTrackID[id])
+            }
+            controller.setSubtitleDelay(delay)
+            persistSubtitleSession()
+            controller.showOSD(String(format: "Primary delay: %+.2fs", delay))
+        case .secondary:
+            secondarySubtitleDelay = delay
+            if let id = activeSecondarySubtitleTrackID {
+                persistDelay(delay, for: externalSourceByTrackID[id])
+            }
+            controller.setSecondarySubtitleDelay(delay)
+            persistSubtitleSession()
+            controller.showOSD(String(format: "Secondary delay: %+.2fs", delay))
+        case .both:
+            applyDelay(delay, to: .primary)
+            applyDelay(delay, to: .secondary)
+        }
+    }
+
+    private func persistDelay(_ delay: Double, for source: URL?) {
+        guard let source, let media = currentItem?.url else { return }
+        if let match = SubtitleAssociationStore.associations(for: media).first(where: { $0.path == source.path }) {
+            SubtitleAssociationStore.updateDelay(for: media, associationID: match.id, delay: delay)
+            refreshRememberedSubtitles()
+        }
+    }
+
+    public func applyBookmarkSync() {
+        guard let audio = bookmarkAudioMark, let sub = bookmarkSubtitleMark else {
+            controller.showOSD("Mark audio and subtitle first")
+            return
+        }
+        let delta = audio - sub
+        adjustSubtitleDelay(by: delta)
+        bookmarkAudioMark = nil
+        bookmarkSubtitleMark = nil
+    }
+
+    public func setSubtitleASSOverride(_ mode: SubtitleASSOverrideMode) {
+        PreferencesStore.shared.preferences.subtitleASSOverride = mode
+        controller.setSubtitleASSOverride(mode)
+        refreshASSForceStyle()
+    }
+
+    public func setSubtitleFadeOut(_ enabled: Bool) {
+        PreferencesStore.shared.preferences.subtitleFadeOut = enabled
+        refreshASSForceStyle()
+    }
+
+    public func setAudioDelay(_ delay: Double) {
+        audioDelay = delay
+        controller.setAudioDelay(delay)
+        controller.showOSD(String(format: "Audio delay: %+.2fs", delay))
+    }
+
+    public func adjustAudioDelay(by delta: Double) {
+        setAudioDelay(audioDelay + delta)
+    }
+
+    public func setSubtitleSpeed(_ speed: Double) {
+        let clamped = max(0.25, min(4, speed))
+        subtitleSpeed = clamped
+        controller.setSubtitleSpeed(clamped)
+        controller.showOSD(String(format: "Sub speed: %.2fx", clamped))
+    }
+
+    public func markBookmarkAudio() {
+        bookmarkAudioMark = info.position
+        controller.showOSD("Audio sync mark")
+    }
+
+    public func markBookmarkSubtitle() {
+        bookmarkSubtitleMark = info.position
+        controller.showOSD("Subtitle sync mark")
+    }
+
+    public func applyLiveSubtitlePreferences() {
+        let p = PreferencesStore.shared.preferences
+        let font = SubtitleFontRegistry.resolveStoredFontSelection(p.subtitleFontID)
+        controller.setSubtitleFontSize(p.subtitleFontSize)
+        if !font.mpvFontName.isEmpty {
+            controller.setSubtitleFont(font.mpvFontName)
+        }
+        controller.setSubtitleColor(normalizedSubtitleColorHex(p.subtitleColorHex))
+        controller.setSubtitleCodepage(SubtitlePreferenceCatalog.encoding(id: p.subtitleEncodingID).id)
+        controller.setSubtitleBorderSize(p.subtitleBorderSize)
+        controller.setSubtitleBorderColor(normalizedSubtitleColorHex(p.subtitleBorderColorHex))
+        controller.setSubtitleShadowOffset(p.subtitleShadowOffset)
+        controller.setSubtitleShadowColor(normalizedSubtitleColorHex(p.subtitleShadowColorHex))
+        controller.setSubtitleBackColor(normalizedSubtitleColorHex(p.subtitleBackColorHex))
+        controller.setSubtitleBold(p.subtitleBold)
+        controller.setSubtitleItalic(p.subtitleItalic)
+        controller.setSubtitleAlignX(p.subtitleAlignX)
+        controller.setSubtitleAlignY(p.subtitleAlignY)
+        let primaryOverride = p.subtitleASSOverride == .force ? SubtitleASSOverrideMode.scale : p.subtitleASSOverride
+        controller.setSubtitleASSOverride(primaryOverride)
+        refreshASSForceStyle()
+        refreshStackedSubtitlePositions()
+        if activeSecondarySubtitleTrackID != nil {
+            controller.setSecondarySubtitleVisible(true)
+        }
+    }
+
+    private func refreshASSForceStyle() {
+        let style = SubtitleASSForceStyleBuilder.build(from: PreferencesStore.shared.preferences)
+        controller.setSubtitleASSForceStyle(style ?? "")
+    }
+
+    /// Single track: exact user placement. Dual: secondary below primary; only then shift up to stay on-screen.
+    private func refreshStackedSubtitlePositions() {
+        let preferredPrimary = min(
+            Self.subtitlePosMax,
+            max(Self.subtitlePosMin, PreferencesStore.shared.preferences.subtitlePos)
+        )
+
+        guard activeSecondarySubtitleTrackID != nil else {
+            controller.setSubtitlePos(preferredPrimary)
+            return
+        }
+
+        let fitted = Self.fittedDualStackPositions(preferredPrimary: preferredPrimary)
+        controller.setSubtitlePos(fitted.primary)
+        controller.setSecondarySubtitlePos(fitted.secondary)
+
+        let prefs = PreferencesStore.shared.preferences
+        if prefs.secondarySubtitlePos != fitted.secondary {
+            PreferencesStore.shared.preferences.secondarySubtitlePos = fitted.secondary
+        }
+        if prefs.secondarySubtitleAlignX != prefs.subtitleAlignX {
+            PreferencesStore.shared.preferences.secondarySubtitleAlignX = prefs.subtitleAlignX
+        }
+    }
+
+    private static let dualSubtitleStackGap = 12
+    /// Keep stack inside the visible band (`sub-pos` > 100 sits past the bottom edge).
+    private static let subtitlePosMin = 0
+    private static let subtitlePosMax = 100
+
+    /// Secondary below primary. If that would clip past the bottom, shift the whole stack up.
+    private static func fittedDualStackPositions(preferredPrimary: Int) -> (primary: Int, secondary: Int) {
+        let preferred = min(subtitlePosMax, max(subtitlePosMin, preferredPrimary))
+        var primary = preferred
+        var secondary = primary + dualSubtitleStackGap
+        if secondary > subtitlePosMax {
+            secondary = subtitlePosMax
+            primary = max(subtitlePosMin, secondary - dualSubtitleStackGap)
+        }
+        return (primary, secondary)
+    }
+
+    private static func stackedSecondaryPos(primaryPos: Int) -> Int {
+        fittedDualStackPositions(preferredPrimary: primaryPos).secondary
+    }
+
+    private func persistSubtitleSession() {
+        guard let media = currentItem?.url else { return }
+        let prefs = PreferencesStore.shared.preferences
+        let primaryKey = activeSubtitleTrack.map {
+            SubtitleSessionStore.trackKey(for: $0, sourceURL: externalSourceByTrackID[$0.id])
+        }
+        let secondaryKey = activeSecondarySubtitleTrack.map {
+            SubtitleSessionStore.trackKey(for: $0, sourceURL: externalSourceByTrackID[$0.id])
+        }
+        let state = SubtitleSessionState(
+            primaryKey: primaryKey,
+            secondaryKey: secondaryKey,
+            primaryAlignX: prefs.subtitleAlignX.rawValue,
+            primaryAlignY: prefs.subtitleAlignY.rawValue,
+            primaryPos: prefs.subtitlePos,
+            secondaryAlignX: prefs.secondarySubtitleAlignX.rawValue,
+            secondaryPos: prefs.secondarySubtitlePos,
+            primaryDelay: subtitleDelay,
+            secondaryDelay: secondarySubtitleDelay,
+            audioDelay: audioDelay,
+            syncTarget: syncTarget.rawValue,
+            usingBakedLayout: false
+        )
+        SubtitleSessionStore.save(state, for: media)
+    }
+
+    private func restoreSubtitleSession(for item: MediaItem) async {
+        refreshRememberedSubtitles()
+
+        guard let state = SubtitleSessionStore.load(for: item.url) else {
+            if !rememberedSubtitles.isEmpty {
+                await restoreRememberedSubtitlesOnly(for: item)
+            } else {
+                applyAutomaticSubtitles(for: item)
+            }
+            return
+        }
+
+        PreferencesStore.shared.preferences.subtitleAlignX =
+            SubtitleHorizontalAlign(rawValue: state.primaryAlignX) ?? .center
+        PreferencesStore.shared.preferences.subtitleAlignY =
+            SubtitleVerticalAlign(rawValue: state.primaryAlignY) ?? .bottom
+        PreferencesStore.shared.preferences.subtitlePos = state.primaryPos
+        PreferencesStore.shared.preferences.secondarySubtitleAlignX =
+            PreferencesStore.shared.preferences.subtitleAlignX
+        PreferencesStore.shared.preferences.secondarySubtitlePos = Self.stackedSecondaryPos(
+            primaryPos: state.primaryPos
+        )
+        syncTarget = SubtitleSyncTarget(rawValue: state.syncTarget) ?? .primary
+        subtitleDelay = state.primaryDelay
+        secondarySubtitleDelay = state.secondaryDelay
+        audioDelay = state.audioDelay
+        controller.setAudioDelay(state.audioDelay)
+
+        await restoreRememberedSubtitlesOnly(for: item)
+        refreshTracks(force: true)
+        applyLiveSubtitlePreferences()
+
+        if let primaryKey = state.primaryKey,
+           let primaryID = await resolveTrackID(forKey: primaryKey) {
+            controller.selectTrack(id: primaryID, kind: .subtitle)
+            refreshTracks(force: true)
+        } else if state.primaryKey == nil {
+            controller.disableSubtitles()
+        }
+
+        if let secondaryKey = state.secondaryKey,
+           let secondaryID = await resolveTrackID(forKey: secondaryKey) {
+            controller.selectSecondarySubtitleTrack(id: secondaryID)
+            controller.setSecondarySubtitleVisible(true)
+            refreshTracks(force: true)
+        } else {
+            controller.disableSecondarySubtitles()
+        }
+
+        controller.setSubtitleDelay(state.primaryDelay)
+        controller.setSecondarySubtitleDelay(state.secondaryDelay)
+        controller.setSubtitlePlacement(
+            SubtitlePlacementAnchor.nearest(
+                alignX: PreferencesStore.shared.preferences.subtitleAlignX,
+                verticalPos: state.primaryPos
+            )
+        )
+        refreshStackedSubtitlePositions()
+        persistSubtitleSession()
+        controller.showOSD("Restored subtitle layout")
+    }
+
+    private func restoreRememberedSubtitlesOnly(for item: MediaItem) async {
+        let associations = SubtitleAssociationStore.associations(for: item.url)
+        rememberedSubtitles = associations
+        for association in associations {
+            guard let url = SubtitleAssociationStore.resolveURL(association) else { continue }
+            if externalSourceByTrackID.values.contains(where: { $0.path == url.path }) { continue }
+            grantFileAccess(to: url)
+            pendingExternalSourceURL = url
+            if association.encodingID != PreferencesStore.shared.preferences.subtitleEncodingID {
+                setSubtitleEncoding(association.encodingID)
+            }
+            controller.addSubtitle(url: url)
+            try? await Task.sleep(for: .milliseconds(250))
+            refreshTracks(force: true)
+        }
+    }
+
+    private func urlFromExternalKey(_ key: String) -> URL? {
+        guard key.hasPrefix("external:") else { return nil }
+        let path = String(key.dropFirst("external:".count))
+        let url = URL(fileURLWithPath: path)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private func resolveTrackID(forKey key: String) async -> Int? {
+        refreshTracks(force: true)
+        if key.hasPrefix("external:") {
+            let path = String(key.dropFirst("external:".count))
+            if let id = externalSourceByTrackID.first(where: { $0.value.path == path })?.key {
+                return id
+            }
+            if let track = subtitleTracks.first(where: { $0.externalFilename == path }) {
+                return track.id
+            }
+            return nil
+        }
+
+        if let track = subtitleTracks.first(where: {
+            SubtitleSessionStore.trackKey(for: $0, sourceURL: externalSourceByTrackID[$0.id]) == key
+        }) {
+            return track.id
+        }
+
+        let parts = key.split(separator: ":").map(String.init)
+        if parts.count >= 2, parts[0] == "embedded", let ff = Int(parts[1]),
+           let track = subtitleTracks.first(where: { $0.ffIndex == ff }) {
+            return track.id
+        }
+        return nil
     }
 
     public func refreshCaptionTracks() {
         refreshTracks(force: true)
+        syncTimingFromEngine()
     }
 
     public func cycleSubtitle() {
@@ -536,6 +1097,7 @@ public final class PlayerSession: PlaybackEngine {
                 pendingStartPosition = nil
             }
             refreshInfo(force: true)
+            #if os(iOS) || os(tvOS)
             if resumePausedAfterReload {
                 resumePausedAfterReload = false
                 controller.pause()
@@ -544,15 +1106,21 @@ public final class PlayerSession: PlaybackEngine {
             } else {
                 play()
             }
+            #else
+            play()
+            #endif
             if let item = currentItem {
                 EventBus.shared.emit(.fileLoaded(item))
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(350))
                     refreshTracks(force: true)
-                    applyAutomaticSubtitles(for: item)
+                    applyLiveSubtitlePreferences()
+                    await restoreSubtitleSession(for: item)
                 }
             }
+            #if os(iOS) || os(tvOS)
             skipExtrasOnNextFileLoad = false
+            #endif
         case .endFile(let reason, let error):
             handleEndFile(reason: reason, error: error)
         case .propertyChanged:
@@ -562,17 +1130,40 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     private func applyAutomaticSubtitles(for item: MediaItem) {
+        #if os(iOS) || os(tvOS)
         guard !skipExtrasOnNextFileLoad else { return }
+        #endif
         guard !subtitlesAreActive else { return }
 
-        if let embedded = embeddedSubtitleTracks.first(where: { $0.isDefault }) ?? embeddedSubtitleTracks.first {
+        let prefs = PreferencesStore.shared.preferences
+        var candidates = embeddedSubtitleTracks
+        if prefs.forcedSubtitlesOnly {
+            let forced = candidates.filter(\.isForced)
+            if !forced.isEmpty { candidates = forced }
+        }
+        if prefs.preferSDHSubtitles {
+            let sdh = candidates.filter(\.isLikelySDH)
+            if !sdh.isEmpty { candidates = sdh }
+        }
+
+        let preferred = prefs.preferredSubtitleLanguage.lowercased()
+        let embedded = candidates.first(where: {
+            ($0.language ?? "").lowercased().hasPrefix(preferred) && !preferred.isEmpty
+        })
+            ?? candidates.first(where: \.isDefault)
+            ?? candidates.first
+
+        if let embedded {
             selectSubtitleTrack(id: embedded.id)
             return
         }
 
-        guard PreferencesStore.shared.preferences.autoLoadSubtitles, item.url.isFileURL else { return }
+        guard prefs.autoLoadSubtitles, item.url.isFileURL else { return }
         let matches = SubtitleFileMatcher.findLocalSubtitles(for: item.url)
-        if let match = SubtitleFileMatcher.preferredMatch(from: matches) {
+        if let match = SubtitleFileMatcher.preferredMatch(
+            from: matches,
+            preferredLanguage: prefs.preferredSubtitleLanguage
+        ) {
             loadExternalSubtitle(url: match.url)
         }
     }
@@ -583,10 +1174,42 @@ public final class PlayerSession: PlaybackEngine {
         guard force || now.timeIntervalSince(lastTrackRefresh) >= 0.35 else { return }
         lastTrackRefresh = now
 
+        let previousSecondaryID = activeSecondarySubtitleTrackID
         let snapshot = controller.trackSnapshot()
         tracks = snapshot.tracks
         activeSubtitleTrackID = snapshot.activeSubtitleTrackID
+        activeSecondarySubtitleTrackID = snapshot.activeSecondarySubtitleTrackID
+
+        if let pending = pendingExternalSourceURL {
+            let known = Set(externalSourceByTrackID.keys)
+            if let newest = snapshot.externalSubtitleTracks
+                .map(\.id)
+                .filter({ !known.contains($0) })
+                .max() {
+                externalSourceByTrackID[newest] = pending
+            }
+            pendingExternalSourceURL = nil
+        }
+
+        if let secondaryID = activeSecondarySubtitleTrackID {
+            controller.setSecondarySubtitleVisible(true)
+            if previousSecondaryID != secondaryID {
+                refreshStackedSubtitlePositions()
+            }
+        } else if previousSecondaryID != nil {
+            // Secondary just cleared — restore primary to its normal placement.
+            refreshStackedSubtitlePositions()
+        }
+
+        syncTimingFromEngine()
         EventBus.shared.emit(.tracksUpdated(tracks))
+    }
+
+    private func syncTimingFromEngine() {
+        subtitleDelay = controller.subtitleDelay()
+        secondarySubtitleDelay = controller.secondarySubtitleDelay()
+        audioDelay = controller.audioDelay()
+        subtitleSpeed = controller.subtitleSpeed()
     }
 
     private func handleEndFile(reason: MPVEndFileReason, error: Int32) {

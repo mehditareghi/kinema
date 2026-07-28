@@ -15,15 +15,16 @@ let package = Package(
         .package(path: "../KinemaCore"),
         .package(path: "../KinemaMedia"),
         .package(path: "../KinemaPlayback"),
-        .package(path: "../KinemaSubtitles")
+        .package(path: "../KinemaSubtitles"),
+        .package(path: "../KinemaSharing")
     ],
     targets: [
         .target(
             name: "KinemaUI",
-            dependencies: ["KinemaCore", "KinemaMedia", "KinemaPlayback", "KinemaSubtitles"],
+            dependencies: ["KinemaCore", "KinemaMedia", "KinemaPlayback", "KinemaSubtitles", "KinemaSharing"],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
-                .linkedFramework("QuickLookThumbnailing"),
+                .linkedFramework("QuickLookThumbnailing", .when(platforms: [.iOS, .macOS])),
                 .linkedFramework("IOKit", .when(platforms: [.macOS]))
             ]
         )

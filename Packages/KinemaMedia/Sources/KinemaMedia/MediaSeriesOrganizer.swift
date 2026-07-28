@@ -136,7 +136,7 @@ public enum MediaSeriesOrganizer {
             .compactMap { episodes -> VirtualSeriesFolder? in
                 guard let sample = episodes.first else { return nil }
                 let urls = episodes.map(\.url).sorted {
-                    $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
+                    $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
                 }
                 return VirtualSeriesFolder(
                     id: "show-\(sample.showKey)",
@@ -145,11 +145,13 @@ public enum MediaSeriesOrganizer {
                     videoURLs: urls
                 )
             }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
 
         return SeriesBrowseContent(
             virtualFolders: virtualFolders,
-            videoURLs: looseURLs.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+            videoURLs: looseURLs.sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }
         )
     }
 

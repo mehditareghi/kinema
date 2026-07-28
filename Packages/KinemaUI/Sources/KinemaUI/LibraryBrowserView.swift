@@ -20,6 +20,13 @@ public struct LibraryBrowserView: View {
     @State private var showInfo = false
     @State private var fullyWatchedFolderPaths: Set<String> = []
     @State private var progressToken: UUID?
+    @State private var searchText = ""
+    @State private var showNewFolderAlert = false
+    @State private var newFolderName = ""
+    @State private var isReloading = false
+    @State private var pendingReloadTask: Task<Void, Never>?
+    /// Path of the directory whose listing currently backs `items` (nil = not listed yet).
+    @State private var listedDirectoryPath: String?
 
     private var accent: Color { KinemaTheme.accent }
     private var rootStore: LibraryRootStore { browse.rootStore }
@@ -33,16 +40,30 @@ public struct LibraryBrowserView: View {
 
     private var realFolders: [LibraryItem] {
         guard browse.virtualPath.isEmpty else { return [] }
-        return items.filter(\.isDirectory)
+        return filterBySearch(items.filter(\.isDirectory))
     }
 
     private var virtualFolders: [VirtualSeriesFolder] {
-        organizedContent.virtualFolders
+        let folders = organizedContent.virtualFolders
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return folders }
+        return folders.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    /// Real folders and spotlight folders in one A→Z list.
+    private var sortedFolderRows: [BrowseFolderRow] {
+        var rows: [BrowseFolderRow] = []
+        rows.append(contentsOf: realFolders.map { .real($0) })
+        rows.append(contentsOf: virtualFolders.map { .virtual($0) })
+        return rows.sorted {
+            $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending
+        }
     }
 
     private var displayedVideos: [LibraryItem] {
         let lookup = Dictionary(uniqueKeysWithValues: items.filter { !$0.isDirectory }.map { ($0.url, $0) })
-        return organizedContent.videoURLs.compactMap { lookup[$0] }
+        let videos = organizedContent.videoURLs.compactMap { lookup[$0] }
+        return filterBySearch(videos)
     }
 
     private var hasVisibleContent: Bool {
@@ -50,6 +71,53 @@ public struct LibraryBrowserView: View {
             return !rootStore.roots.isEmpty
         }
         return !realFolders.isEmpty || !virtualFolders.isEmpty || !displayedVideos.isEmpty
+    }
+
+    /// True once we've finished listing the directory currently on screen.
+    private var hasListedCurrentDirectory: Bool {
+        guard let directory = browse.currentDirectory else { return false }
+        return listedDirectoryPath == directory.standardizedFileURL.path
+    }
+
+    private var isBuiltInLibraryRoot: Bool {
+        browse.selectedRoot?.isBuiltIn == true
+            && browse.folderTrail.isEmpty
+            && browse.virtualPath.isEmpty
+    }
+
+    @ViewBuilder
+    private var emptyFolderContent: some View {
+        if isBuiltInLibraryRoot {
+            ContentUnavailableView {
+                Label(KinemaCopy.builtInEmptyTitle, systemImage: "film.stack.fill")
+            } description: {
+                Text(KinemaCopy.builtInEmptyMessage)
+            } actions: {
+                Button {
+                    newFolderName = ""
+                    showNewFolderAlert = true
+                } label: {
+                    Label(KinemaCopy.newFolder, systemImage: "plus.rectangle.on.folder")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if browse.virtualPath.isEmpty {
+            ContentUnavailableView(
+                KinemaCopy.nothingHereTitle,
+                systemImage: "folder",
+                description: Text(KinemaCopy.nothingHereMessage)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView(
+                KinemaCopy.nothingInSpotlightTitle,
+                systemImage: "rectangle.stack",
+                description: Text(KinemaCopy.nothingInSpotlightMessage)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     public init(viewModel: PlayerViewModel) {
@@ -64,28 +132,30 @@ public struct LibraryBrowserView: View {
 
             if browse.isAtLibraryHome {
                 libraryHomeContent
-            } else if !hasVisibleContent {
-                ContentUnavailableView(
-                    browse.virtualPath.isEmpty ? KinemaCopy.nothingHereTitle : KinemaCopy.nothingInSpotlightTitle,
-                    systemImage: browse.virtualPath.isEmpty ? "folder" : "rectangle.stack",
-                    description: Text(browse.virtualPath.isEmpty
-                        ? KinemaCopy.nothingHereMessage
-                        : KinemaCopy.nothingInSpotlightMessage)
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            } else if hasVisibleContent {
                 folderContents
+            } else if hasListedCurrentDirectory {
+                emptyFolderContent
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .searchable(text: $searchText, prompt: KinemaCopy.searchLibrary)
         .onAppear {
             reloadIfNeeded()
             progressToken = EventBus.shared.subscribe { event in
-                if case .watchProgressUpdated = event {
-                    Task { @MainActor in reloadIfNeeded() }
+                switch event {
+                case .watchProgressUpdated, .libraryChanged:
+                    Task { @MainActor in scheduleReload() }
+                default:
+                    break
                 }
             }
         }
         .onDisappear {
+            pendingReloadTask?.cancel()
+            pendingReloadTask = nil
             if let progressToken {
                 EventBus.shared.unsubscribe(progressToken)
             }
@@ -96,6 +166,7 @@ public struct LibraryBrowserView: View {
             }
         }
         .onChange(of: browse.selectedRootID) { _, _ in
+            // Navigation must reload immediately — debouncing flashes the empty state.
             reloadIfNeeded()
         }
         .onChange(of: browse.currentDirectory) { _, _ in
@@ -116,6 +187,13 @@ public struct LibraryBrowserView: View {
             Button(KinemaCopy.rename) { commitRename() }
         } message: {
             Text(KinemaCopy.renamePrompt)
+        }
+        .alert(KinemaCopy.newFolder, isPresented: $showNewFolderAlert) {
+            TextField("Name", text: $newFolderName)
+            Button(KinemaCopy.cancel, role: .cancel) { newFolderName = "" }
+            Button(KinemaCopy.newFolder) { commitNewFolder() }
+        } message: {
+            Text(KinemaCopy.newFolderPrompt)
         }
         .confirmationDialog(
             KinemaCopy.removeSourceTitle,
@@ -163,12 +241,7 @@ public struct LibraryBrowserView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 homeHeader
-
-                if rootStore.roots.isEmpty {
-                    emptyLibraryHome
-                } else {
-                    libraryRootsSection
-                }
+                libraryRootsSection
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -186,26 +259,6 @@ public struct LibraryBrowserView: View {
         }
     }
 
-    private var emptyLibraryHome: some View {
-        VStack(spacing: 16) {
-            ContentUnavailableView(
-                KinemaCopy.noSourcesTitle,
-                systemImage: "folder.badge.plus",
-                description: Text(KinemaCopy.noSourcesMessage)
-            )
-
-            Button {
-                showFolderPicker = true
-            } label: {
-                Label(KinemaCopy.addFirstSource, systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(accent)
-        }
-        .padding(.top, 8)
-    }
-
     private var libraryRootsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader(KinemaCopy.sources, systemImage: "externaldrive.fill")
@@ -215,13 +268,20 @@ public struct LibraryBrowserView: View {
                     Button {
                         browse.openRoot(root)
                     } label: {
-                        MediaFolderTile(
-                            name: root.name,
-                            accent: accent,
-                            systemImage: "externaldrive.fill",
-                            subtitle: rootSubtitle(for: root),
-                            isFullyWatched: isFolderFullyWatched(rootURL(for: root))
-                        )
+                        if root.isBuiltIn {
+                            BuiltInLibrarySourceTile(
+                                accent: accent,
+                                isFullyWatched: isFolderFullyWatched(rootURL(for: root))
+                            )
+                        } else {
+                            MediaFolderTile(
+                                name: root.name,
+                                accent: accent,
+                                systemImage: "externaldrive.fill",
+                                subtitle: rootSubtitle(for: root),
+                                isFullyWatched: isFolderFullyWatched(rootURL(for: root))
+                            )
+                        }
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -242,7 +302,7 @@ public struct LibraryBrowserView: View {
     private var folderContents: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if !realFolders.isEmpty || !virtualFolders.isEmpty {
+                if !sortedFolderRows.isEmpty {
                     foldersSection
                 }
                 if !displayedVideos.isEmpty {
@@ -259,31 +319,56 @@ public struct LibraryBrowserView: View {
             sectionHeader(sectionFoldersTitle, systemImage: "folder")
 
             VStack(spacing: 8) {
-                ForEach(realFolders) { item in
-                    Button { open(item) } label: {
-                        MediaFolderTile(
-                            name: item.url.lastPathComponent,
-                            accent: accent,
-                            isFullyWatched: isFolderFullyWatched(item.url)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        folderContextMenu(for: item)
-                    }
-                }
+                ForEach(sortedFolderRows) { row in
+                    switch row {
+                    case .real(let item):
+                        Button { open(item) } label: {
+                            MediaFolderTile(
+                                name: item.url.lastPathComponent,
+                                accent: accent,
+                                isFullyWatched: isFolderFullyWatched(item.url)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            folderContextMenu(for: item)
+                        }
 
-                ForEach(virtualFolders) { folder in
-                    Button { browse.openVirtual(folder.segment) } label: {
-                        MediaFolderTile(
-                            name: folder.title,
-                            accent: accent,
-                            systemImage: "rectangle.stack.fill",
-                            subtitle: KinemaCopy.spotlightBadge,
-                            isFullyWatched: WatchProgressStore.areAllWatched(folder.videoURLs)
-                        )
+                    case .virtual(let folder):
+                        Button { browse.openVirtual(folder.segment) } label: {
+                            MediaFolderTile(
+                                name: folder.title,
+                                accent: accent,
+                                systemImage: "rectangle.stack.fill",
+                                subtitle: KinemaCopy.spotlightBadge,
+                                isFullyWatched: WatchProgressStore.areAllWatched(folder.videoURLs)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                playFolderURLs(folder.videoURLs)
+                            } label: {
+                                Label(KinemaCopy.playFolder, systemImage: "play.fill")
+                            }
+
+                            if !folder.videoURLs.isEmpty {
+                                if WatchProgressStore.areAllWatched(folder.videoURLs) {
+                                    Button {
+                                        markAllUnwatched(folder.videoURLs)
+                                    } label: {
+                                        Label(KinemaCopy.markAllUnwatched, systemImage: "arrow.uturn.backward.circle")
+                                    }
+                                } else {
+                                    Button {
+                                        markAllWatched(folder.videoURLs)
+                                    } label: {
+                                        Label(KinemaCopy.markAllWatched, systemImage: "checkmark.circle")
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -334,6 +419,27 @@ public struct LibraryBrowserView: View {
                     Label(KinemaCopy.addSource, systemImage: "folder.badge.plus")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(accent)
+
+                if !browse.isAtLibraryHome, browse.virtualPath.isEmpty {
+                    Button {
+                        newFolderName = ""
+                        showNewFolderAlert = true
+                    } label: {
+                        Label(KinemaCopy.newFolder, systemImage: "plus.rectangle.on.folder")
+                            .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(accent)
+                }
+
+                Button {
+                    forceRescan()
+                } label: {
+                    Label(KinemaCopy.rescan, systemImage: "arrow.clockwise")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
                 .tint(accent)
 
                 Button {
@@ -412,17 +518,27 @@ public struct LibraryBrowserView: View {
             Label(KinemaCopy.open, systemImage: "folder")
         }
 
-        Button {
-            renameRootTarget = root
-            renameText = root.name
-        } label: {
-            Label(KinemaCopy.rename, systemImage: "pencil")
-        }
+        if root.isBuiltIn {
+            #if os(macOS)
+            Button {
+                revealInFinder(root)
+            } label: {
+                Label(KinemaCopy.revealInFinder, systemImage: "finder")
+            }
+            #endif
+        } else {
+            Button {
+                renameRootTarget = root
+                renameText = root.name
+            } label: {
+                Label(KinemaCopy.rename, systemImage: "pencil")
+            }
 
-        Button(role: .destructive) {
-            removeRootTarget = root
-        } label: {
-            Label(KinemaCopy.removeSource, systemImage: "folder.badge.minus")
+            Button(role: .destructive) {
+                removeRootTarget = root
+            } label: {
+                Label(KinemaCopy.removeSource, systemImage: "folder.badge.minus")
+            }
         }
     }
 
@@ -432,6 +548,29 @@ public struct LibraryBrowserView: View {
             open(item)
         } label: {
             Label("Open", systemImage: "folder")
+        }
+
+        Button {
+            playFolderURLs(WatchProgressStore.mediaURLs(under: item.url))
+        } label: {
+            Label(KinemaCopy.playFolder, systemImage: "play.fill")
+        }
+
+        let folderVideos = WatchProgressStore.mediaURLs(under: item.url)
+        if !folderVideos.isEmpty {
+            if WatchProgressStore.areAllWatched(folderVideos) {
+                Button {
+                    markAllUnwatched(folderVideos)
+                } label: {
+                    Label(KinemaCopy.markAllUnwatched, systemImage: "arrow.uturn.backward.circle")
+                }
+            } else {
+                Button {
+                    markAllWatched(folderVideos)
+                } label: {
+                    Label(KinemaCopy.markAllWatched, systemImage: "checkmark.circle")
+                }
+            }
         }
 
         Button {
@@ -526,6 +665,9 @@ public struct LibraryBrowserView: View {
     }
 
     private func rootSubtitle(for root: LibraryRoot) -> String {
+        if root.isBuiltIn {
+            return KinemaCopy.builtInSourceSubtitle
+        }
         if let path = root.path {
             let url = URL(fileURLWithPath: path)
             let parent = url.deletingLastPathComponent().path
@@ -546,53 +688,121 @@ public struct LibraryBrowserView: View {
         return fullyWatchedFolderPaths.contains(url.standardizedFileURL.path)
     }
 
+    private func filterBySearch(_ values: [LibraryItem]) -> [LibraryItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return values }
+        return values.filter {
+            $0.url.lastPathComponent.localizedCaseInsensitiveContains(query)
+                || $0.url.deletingPathExtension().lastPathComponent.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private func forceRescan() {
+        isReloading = false
+        pendingReloadTask?.cancel()
+        pendingReloadTask = nil
+        LibraryDirectoryWatcher.shared.suppressEvents(for: 1.0)
+        reloadIfNeeded()
+        #if os(iOS) || os(macOS)
+        Task(priority: .utility) {
+            LibrarySpotlightIndexer.shared.indexBuiltInLibrary()
+        }
+        #endif
+        viewModel.showOSD(KinemaCopy.rescan)
+    }
+
+    private func scheduleReload() {
+        pendingReloadTask?.cancel()
+        pendingReloadTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+            reloadIfNeeded()
+        }
+    }
+
     private func reloadIfNeeded() {
+        guard !isReloading else { return }
         if browse.isAtLibraryHome {
-            items = []
-            refreshFullyWatchedFolders(directoryFolders: [], includeRoots: true)
+            listedDirectoryPath = nil
+            if !items.isEmpty {
+                items = []
+            }
+            if !fullyWatchedFolderPaths.isEmpty {
+                fullyWatchedFolderPaths = []
+            }
             return
         }
-        guard let directory = browse.currentDirectory else {
-            items = []
-            fullyWatchedFolderPaths = []
+        guard let directory = browse.currentDirectory ?? browse.libraryRootURL else {
+            listedDirectoryPath = nil
+            if !items.isEmpty { items = [] }
+            if !fullyWatchedFolderPaths.isEmpty { fullyWatchedFolderPaths = [] }
             return
+        }
+        // Navigating to a new folder — don't keep the previous listing path or empty
+        // state will flash before the new listing finishes.
+        let path = directory.standardizedFileURL.path
+        if listedDirectoryPath != path {
+            listedDirectoryPath = nil
         }
         reload(directory: directory)
     }
 
     private func reload(directory: URL) {
+        isReloading = true
+        LibraryDirectoryWatcher.shared.suppressEvents(for: 1.0)
+        defer { isReloading = false }
+
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .nameKey],
             options: [.skipsHiddenFiles]
         )) ?? []
 
         items = urls
             .filter { MediaFileTypes.isBrowsable($0) }
-            .sorted { lhs, rhs in
-                let lDir = (try? lhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-                let rDir = (try? rhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-                if lDir != rDir { return lDir && !rDir }
-                return lhs.lastPathComponent.localizedCaseInsensitiveCompare(rhs.lastPathComponent) == .orderedAscending
-            }
+            .sorted(by: Self.compareLibraryURLs)
             .map { url in
                 let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 let progress = isDir ? nil : WatchProgressStore.entry(for: url)
                 return LibraryItem(url: url, isDirectory: isDir, progress: progress)
             }
 
+        listedDirectoryPath = directory.standardizedFileURL.path
+
         refreshFullyWatchedFolders(
             directoryFolders: items.filter(\.isDirectory).map(\.url),
-            includeRoots: false
+            includeRoots: false,
+            shallow: true
         )
         ThumbnailPrefetcher.schedule(displayedVideos.map(\.url))
     }
 
-    private func refreshFullyWatchedFolders(directoryFolders: [URL], includeRoots: Bool) {
+    /// Folders first, then A→Z with Finder-style numeric sorting.
+    private static func compareLibraryURLs(_ lhs: URL, _ rhs: URL) -> Bool {
+        let lDir = (try? lhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        let rDir = (try? rhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        if lDir != rDir { return lDir && !rDir }
+        return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+    }
+
+    private func refreshFullyWatchedFolders(
+        directoryFolders: [URL],
+        includeRoots: Bool,
+        shallow: Bool = false
+    ) {
         var watched = Set<String>()
 
         for folder in directoryFolders {
-            let videos = WatchProgressStore.mediaURLs(under: folder)
+            let videos: [URL]
+            if shallow {
+                videos = (try? FileManager.default.contentsOfDirectory(
+                    at: folder,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                ))?.filter { MediaFileTypes.isMediaFile($0) } ?? []
+            } else {
+                videos = WatchProgressStore.mediaURLs(under: folder)
+            }
             if WatchProgressStore.areAllWatched(videos) {
                 watched.insert(folder.standardizedFileURL.path)
             }
@@ -622,9 +832,32 @@ public struct LibraryBrowserView: View {
 
     private func playFrom(_ item: LibraryItem, audioOnly: Bool) {
         guard !item.isDirectory, !viewModel.isOpeningMedia else { return }
-        let mediaItems = displayedVideos.map { MediaItem(url: $0.url) }
-        let selected = mediaItems.first { $0.url == item.url } ?? MediaItem(url: item.url)
+        // Queue every title currently shown in this folder / spotlight, in on-screen order,
+        // so playback continues automatically when one finishes.
+        let mediaItems = playlistItemsForCurrentFolder()
+        let selected = mediaItems.first { playlistURLsEqual($0.url, item.url) }
+            ?? MediaItem(url: item.url)
         Task { await viewModel.openItems(mediaItems, startingAt: selected, audioOnly: audioOnly) }
+    }
+
+    private func playFolderURLs(_ urls: [URL]) {
+        guard !urls.isEmpty, !viewModel.isOpeningMedia else { return }
+        let ordered = urls.sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+        }
+        let mediaItems = ordered.map { MediaItem(url: $0) }
+        Task { await viewModel.openItems(mediaItems, startingAt: mediaItems.first, audioOnly: false) }
+    }
+
+    /// Titles in the current browse location, in the same order as the library UI.
+    private func playlistItemsForCurrentFolder() -> [MediaItem] {
+        displayedVideos.map { MediaItem(url: $0.url) }
+    }
+
+    private func playlistURLsEqual(_ lhs: URL, _ rhs: URL) -> Bool {
+        if lhs == rhs { return true }
+        guard lhs.isFileURL, rhs.isFileURL else { return false }
+        return lhs.standardizedFileURL == rhs.standardizedFileURL
     }
 
     private func markWatched(_ item: LibraryItem) {
@@ -654,6 +887,18 @@ public struct LibraryBrowserView: View {
         viewModel.showOSD(KinemaCopy.markedUnwatched)
     }
 
+    private func markAllWatched(_ urls: [URL]) {
+        WatchProgressStore.markAllWatched(urls)
+        reloadIfNeeded()
+        viewModel.showOSD(KinemaCopy.markedAllWatched)
+    }
+
+    private func markAllUnwatched(_ urls: [URL]) {
+        WatchProgressStore.markAllUnwatched(urls)
+        reloadIfNeeded()
+        viewModel.showOSD(KinemaCopy.markedAllUnwatched)
+    }
+
     #if os(iOS) || os(macOS)
     private func handleFolderImport(_ result: Result<[URL], Error>) {
         if case .success(let urls) = result, let folder = urls.first {
@@ -665,9 +910,29 @@ public struct LibraryBrowserView: View {
     }
     #endif
 
+    #if os(macOS)
+    private func revealInFinder(_ root: LibraryRoot) {
+        guard let url = rootStore.resolveURL(for: root) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    #endif
+
     private func beginRename(_ item: LibraryItem) {
         renameTarget = item
         renameText = item.url.deletingPathExtension().lastPathComponent
+    }
+
+    private func commitNewFolder() {
+        let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        newFolderName = ""
+        guard !trimmed.isEmpty, let directory = browse.currentDirectory else { return }
+        let destination = directory.appendingPathComponent(trimmed, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+            reloadIfNeeded()
+        } catch {
+            viewModel.showOSD("Couldn't create folder: \(error.localizedDescription)")
+        }
     }
 
     private func commitRename() {
@@ -710,7 +975,10 @@ public struct LibraryBrowserView: View {
     }
 
     private func commitRemoveRoot() {
-        guard let root = removeRootTarget else { return }
+        guard let root = removeRootTarget, !root.isBuiltIn else {
+            removeRootTarget = nil
+            return
+        }
         if browse.selectedRootID == root.id {
             browse.goToLibraryHome()
         }
@@ -720,12 +988,13 @@ public struct LibraryBrowserView: View {
 
     private func commitDelete() {
         guard let item = deleteTarget else { return }
+        let builtIn = LibraryMediaPaths.builtInMediaURL
 
         var coordinationError: NSError?
         var deleteError: Error?
         NSFileCoordinator().coordinate(writingItemAt: item.url, options: .forDeleting, error: &coordinationError) { url in
             do {
-                try FileManager.default.removeItem(at: url)
+                try LibraryMediaPaths.deleteMediaAndCleanupParent(at: url, builtInRoot: builtIn)
             } catch {
                 deleteError = error
             }
@@ -734,6 +1003,10 @@ public struct LibraryBrowserView: View {
         deleteTarget = nil
         if let error = deleteError ?? coordinationError {
             viewModel.showOSD("Delete failed: \(error.localizedDescription)")
+        } else {
+            #if os(iOS) || os(macOS)
+            LibrarySpotlightIndexer.shared.remove(url: item.url)
+            #endif
         }
         reloadIfNeeded()
     }
@@ -746,6 +1019,14 @@ public struct LibraryBrowserView: View {
             lines.append("Duration: \(formatTime(progress.duration))")
             if progress.lastPosition > 0 {
                 lines.append("Resume: \(formatTime(progress.lastPosition))")
+            }
+        }
+        if let cached = VideoThumbnailLoader.cachedPreview(for: item.url) {
+            if let duration = cached.duration, duration > 0, item.progress == nil {
+                lines.append("Duration: \(formatTime(duration))")
+            }
+            if let quality = cached.qualityLabel, !quality.isEmpty {
+                lines.append("Quality: \(quality)")
             }
         }
         if let size = fileSizeString(for: item.url) {
@@ -761,6 +1042,25 @@ public struct LibraryBrowserView: View {
         guard let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
               let size = values.fileSize else { return nil }
         return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+}
+
+private enum BrowseFolderRow: Identifiable {
+    case real(LibraryItem)
+    case virtual(VirtualSeriesFolder)
+
+    var id: String {
+        switch self {
+        case .real(let item): return "real-\(item.id)"
+        case .virtual(let folder): return "virtual-\(folder.id)"
+        }
+    }
+
+    var sortName: String {
+        switch self {
+        case .real(let item): return item.url.lastPathComponent
+        case .virtual(let folder): return folder.title
+        }
     }
 }
 

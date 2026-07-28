@@ -11,8 +11,12 @@ public enum MediaFileTypes {
     }
 
     public static func isBrowsable(_ url: URL) -> Bool {
+        if LibraryMediaPaths.isIgnoredName(url.lastPathComponent) { return false }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return false }
-        return isDirectory.boolValue || isMediaFile(url)
+        if isDirectory.boolValue { return true }
+        guard isMediaFile(url) else { return false }
+        // Hide in-progress Finder/USB copies so we don't open or thumbnail them.
+        return LibraryMediaPaths.isStableMediaFile(url)
     }
 }

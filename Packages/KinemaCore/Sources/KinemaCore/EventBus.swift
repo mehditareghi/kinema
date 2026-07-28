@@ -12,6 +12,7 @@ public enum KinemaEvent: Sendable {
     case osdMessage(String)
     case watchProgressUpdated
     case resumedFrom(TimeInterval)
+    case libraryChanged
 }
 
 @MainActor

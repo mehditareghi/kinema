@@ -1,6 +1,7 @@
 import CoreGraphics
 import FFmpegKit
 import Foundation
+import KinemaCore
 import KinemaMPV
 
 public struct MediaPreview: Sendable {
@@ -38,6 +39,18 @@ public enum MediaArtworkService {
     }
 
     static func extractPreview(from url: URL, at time: TimeInterval) -> MediaPreview {
+        // Skip stubs / in-progress USB copies — probing them is expensive and can
+        // conflict with Finder’s AFC writer (device disconnects mid-transfer).
+        guard LibraryMediaPaths.isStableMediaFile(url) else {
+            return MediaPreview(duration: nil, width: nil, height: nil, image: nil)
+        }
+
+        // Files inside our shared Documents library: read directly.
+        // NSFileCoordinator against an active Finder copy is a known disconnect trigger.
+        if LibraryMediaPaths.isInsideBuiltInLibrary(url) {
+            return extractPreviewCoordinated(from: url, at: time)
+        }
+
         var coordinationError: NSError?
         var preview = MediaPreview(duration: nil, width: nil, height: nil, image: nil)
 

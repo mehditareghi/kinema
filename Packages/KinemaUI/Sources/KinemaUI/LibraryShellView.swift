@@ -439,6 +439,18 @@ public struct OpenStreamView: View {
                 .tint(accent)
                 .disabled(parsedURL == nil || viewModel.isOpeningMedia)
                 .padding(.top, 4)
+
+                Button {
+                    downloadURL()
+                } label: {
+                    Label(KinemaCopy.downloadToLibrary, systemImage: "arrow.down.circle")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                .tint(accent)
+                .disabled(parsedURL == nil)
             }
             .padding(20)
         }
@@ -455,5 +467,11 @@ public struct OpenStreamView: View {
     private func openURL() {
         guard let url = parsedURL, !viewModel.isOpeningMedia else { return }
         Task { await viewModel.open(url) }
+    }
+
+    private func downloadURL() {
+        guard let url = parsedURL else { return }
+        _ = LibraryDownloadService.shared.enqueue(url: url)
+        viewModel.showOSD(KinemaCopy.downloadStarted)
     }
 }

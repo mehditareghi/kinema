@@ -458,9 +458,25 @@ public final class PlayerSession: PlaybackEngine {
     public func playNext() {
         guard playlistIndex + 1 < playlist.count else { return }
         playlistIndex += 1
+        let next = playlist[playlistIndex]
         Task {
-            try? await load(playlist[playlistIndex])
-            play()
+            do {
+                try await load(next)
+                play()
+            } catch {
+                NSLog(
+                    "Kinema: failed to play next %@ — %@",
+                    next.url.lastPathComponent,
+                    error.localizedDescription
+                )
+                // Skip a bad title and keep walking the folder playlist.
+                if playlistIndex + 1 < playlist.count {
+                    playNext()
+                } else {
+                    state = .idle
+                    EventBus.shared.emit(.playlistEnded)
+                }
+            }
         }
     }
 
@@ -1126,6 +1142,11 @@ public final class PlayerSession: PlaybackEngine {
         case .propertyChanged:
             refreshInfo()
             refreshTracks()
+            // With keep-open=yes, EOF often does not unload the file, so END_FILE may
+            // never arrive — advance the playlist from eof-reached instead.
+            if controller.hasReachedEOF {
+                handlePlaybackFinished()
+            }
         }
     }
 
@@ -1272,6 +1293,10 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     private func refreshPosition() {
+        if controller.hasReachedEOF {
+            handlePlaybackFinished()
+            return
+        }
         let updated = controller.playbackInfo()
         guard abs(updated.position - info.position) > 0.05
             || updated.isPaused != info.isPaused
@@ -1289,7 +1314,14 @@ public final class PlayerSession: PlaybackEngine {
         let now = Date()
         guard now.timeIntervalSince(lastProgressSave) >= 15 else { return }
         lastProgressSave = now
-        WatchProgressStore.record(item: item, position: info.position, duration: info.duration)
+        // Silent + async — notifying the library UI / writing JSON on the main
+        // thread was hitching playback every save interval.
+        WatchProgressStore.record(
+            item: item,
+            position: info.position,
+            duration: info.duration,
+            notify: false
+        )
     }
 
     private func refreshInfo(force: Bool = false) {

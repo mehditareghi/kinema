@@ -1,9 +1,11 @@
 import AVFoundation
 import Foundation
 import KinemaMedia
-import QuickLookThumbnailing
 import SwiftUI
 import KinemaCore
+#if os(iOS) || os(macOS)
+import QuickLookThumbnailing
+#endif
 #if os(macOS)
 import AppKit
 #else
@@ -190,6 +192,7 @@ enum VideoThumbnailLoader {
     }
 
     private static func quickLookThumbnail(url: URL) async -> PlatformImage? {
+        #if os(iOS) || os(macOS)
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: CGSize(width: 480, height: 270),
@@ -206,6 +209,9 @@ enum VideoThumbnailLoader {
                 continuation.resume(returning: makePlatformImage(from: cgImage))
             }
         }
+        #else
+        return nil
+        #endif
     }
 
     private static func isAcceptable(_ image: PlatformImage) -> Bool {

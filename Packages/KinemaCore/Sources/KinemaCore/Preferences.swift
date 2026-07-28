@@ -90,6 +90,9 @@ public struct KinemaPreferences: Sendable {
     public var preferSDHSubtitles: Bool
     public var forcedSubtitlesOnly: Bool
     public var openSubtitlesAPIKey: String
+    public var wifiSharingEnabled: Bool
+    public var wifiSharingPasscode: String
+    public var wifiSharingPreferIPv6: Bool
 
     public init(
         volume: Double = 100,
@@ -119,7 +122,10 @@ public struct KinemaPreferences: Sendable {
         preferredSubtitleLanguage: String = "en",
         preferSDHSubtitles: Bool = false,
         forcedSubtitlesOnly: Bool = false,
-        openSubtitlesAPIKey: String = ""
+        openSubtitlesAPIKey: String = "",
+        wifiSharingEnabled: Bool = false,
+        wifiSharingPasscode: String = "",
+        wifiSharingPreferIPv6: Bool = true
     ) {
         self.volume = volume
         self.speed = speed
@@ -149,6 +155,9 @@ public struct KinemaPreferences: Sendable {
         self.preferSDHSubtitles = preferSDHSubtitles
         self.forcedSubtitlesOnly = forcedSubtitlesOnly
         self.openSubtitlesAPIKey = openSubtitlesAPIKey
+        self.wifiSharingEnabled = wifiSharingEnabled
+        self.wifiSharingPasscode = wifiSharingPasscode
+        self.wifiSharingPreferIPv6 = wifiSharingPreferIPv6
     }
 }
 
@@ -187,6 +196,9 @@ public final class PreferencesStore {
         static let preferSDHSubtitles = "kinema.preferSDHSubtitles"
         static let forcedSubtitlesOnly = "kinema.forcedSubtitlesOnly"
         static let openSubtitlesAPIKey = "kinema.openSubtitlesAPIKey"
+        static let wifiSharingEnabled = "kinema.wifiSharingEnabled"
+        static let wifiSharingPasscode = "kinema.wifiSharingPasscode"
+        static let wifiSharingPreferIPv6 = "kinema.wifiSharingPreferIPv6"
     }
 
     public var preferences: KinemaPreferences {
@@ -224,7 +236,10 @@ public final class PreferencesStore {
             preferredSubtitleLanguage: defaults.string(forKey: Keys.preferredSubtitleLanguage) ?? "en",
             preferSDHSubtitles: defaults.object(forKey: Keys.preferSDHSubtitles) as? Bool ?? false,
             forcedSubtitlesOnly: defaults.object(forKey: Keys.forcedSubtitlesOnly) as? Bool ?? false,
-            openSubtitlesAPIKey: defaults.string(forKey: Keys.openSubtitlesAPIKey) ?? ""
+            openSubtitlesAPIKey: defaults.string(forKey: Keys.openSubtitlesAPIKey) ?? "",
+            wifiSharingEnabled: defaults.object(forKey: Keys.wifiSharingEnabled) as? Bool ?? false,
+            wifiSharingPasscode: defaults.string(forKey: Keys.wifiSharingPasscode) ?? "",
+            wifiSharingPreferIPv6: defaults.object(forKey: Keys.wifiSharingPreferIPv6) as? Bool ?? true
         )
     }
 
@@ -257,6 +272,9 @@ public final class PreferencesStore {
         defaults.set(preferences.preferSDHSubtitles, forKey: Keys.preferSDHSubtitles)
         defaults.set(preferences.forcedSubtitlesOnly, forKey: Keys.forcedSubtitlesOnly)
         defaults.set(preferences.openSubtitlesAPIKey, forKey: Keys.openSubtitlesAPIKey)
+        defaults.set(preferences.wifiSharingEnabled, forKey: Keys.wifiSharingEnabled)
+        defaults.set(preferences.wifiSharingPasscode, forKey: Keys.wifiSharingPasscode)
+        defaults.set(preferences.wifiSharingPreferIPv6, forKey: Keys.wifiSharingPreferIPv6)
     }
 
     public func mpvOptions() -> [String: String] {

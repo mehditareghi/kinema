@@ -136,8 +136,8 @@ public struct PlayerControlsOverlay: View {
             .frame(height: 52)
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 22)
-        .safeAreaPadding(.bottom, 6)
+        .padding(.bottom, 8)
+        .safeAreaPadding(.bottom, 2)
     }
 
     private var transportControls: some View {

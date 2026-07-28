@@ -25,7 +25,7 @@ public enum KinemaCopy {
 
     public static let collectionIntroTitle = "Your Sources"
     public static let collectionIntroBody =
-        "Connect the folders you already use. Kinema turns them into your personal collection — with smart spotlights for series, and room for everything else."
+        "Your Kinema library is always here. Add more folders from Files, iCloud Drive, or anywhere on your device — with smart spotlights for series."
 
     public static let backToCollection = "Collection"
 
@@ -35,6 +35,25 @@ public enum KinemaCopy {
         "This removes the source from your collection. Your files stay on disk."
 
     public static let savedSource = "Saved source"
+    public static let onThisDevice = "On This Device"
+    public static let builtInSourceSubtitle = "On this device · Finder & Files ready"
+    public static let builtInSourceBadge = "Built-in"
+    public static let revealInFinder = "Reveal in Finder"
+    public static let newFolder = "New Folder"
+    public static let newFolderPrompt = "Enter a name for the folder."
+    public static let rescan = "Rescan"
+    public static let playFolder = "Play Folder"
+    public static let searchLibrary = "Search library"
+    public static let wifiSharing = "Wi‑Fi Sharing"
+    public static let wifiSharingSubtitle = "Upload and download media from a computer on the same network."
+    public static let wifiSharingPasscode = "Passcode"
+    public static let wifiSharingPasscodeHint = "Optional. Username is kinema."
+    public static let wifiSharingPreferIPv6 = "Prefer IPv6 addresses"
+    public static let wifiSharingURL = "Sharing address"
+    public static let copyURL = "Copy Address"
+    public static let downloadToLibrary = "Download to Library"
+    public static let downloadStarted = "Download started"
+    public static let downloadFailed = "Download failed"
 
     // MARK: - Content sections
 
@@ -46,12 +65,24 @@ public enum KinemaCopy {
 
     // MARK: - Empty states
 
-    public static let noSourcesTitle = "No sources yet"
-    public static let noSourcesMessage = addSourceHint
+    public static let noSourcesTitle = "No extra sources yet"
+    public static let noSourcesMessage =
+        "Your built-in Kinema library is ready. Add another folder anytime."
 
     public static let nothingHereTitle = "Nothing here yet"
     public static let nothingHereMessage =
         "This location is empty. Try another folder in your collection, or add a new source."
+
+    public static let builtInEmptyTitle = "Your Kinema library is empty"
+    public static let builtInEmptyMessage: String = {
+        #if os(macOS)
+        return "Drop videos into this library from Finder, turn on Wi‑Fi Sharing in Preferences to upload from another computer, or download a stream into Kinema. Files you add here stay on this Mac."
+        #elseif os(tvOS)
+        return "Turn on Wi‑Fi Sharing in Preferences to upload videos from a computer on the same network, or download a stream into Kinema. Files you add here live in this library."
+        #else
+        return "Add videos with the Files app (On My iPhone / iPad → Kinema), AirDrop, Wi‑Fi Sharing in Preferences, or Download to Library from Stream. Everything here stays on this device."
+        #endif
+    }()
 
     public static let nothingInSpotlightTitle = "No titles in this spotlight"
     public static let nothingInSpotlightMessage =
@@ -107,8 +138,12 @@ public enum KinemaCopy {
 
     public static let markWatched = "Mark as Watched"
     public static let markUnwatched = "Mark as Unwatched"
+    public static let markAllWatched = "Mark All as Watched"
+    public static let markAllUnwatched = "Mark All as Unwatched"
     public static let markedWatched = "Marked as watched"
     public static let markedUnwatched = "Marked as unwatched"
+    public static let markedAllWatched = "Marked all as watched"
+    public static let markedAllUnwatched = "Marked all as unwatched"
     public static let couldNotMarkWatched = "Couldn't determine duration"
     public static let folderWatched = "Watched"
 

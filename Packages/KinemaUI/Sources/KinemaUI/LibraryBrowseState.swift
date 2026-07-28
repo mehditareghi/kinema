@@ -33,10 +33,15 @@ public final class LibraryBrowseState {
     public var folderTrail: [URL] = []
     public var virtualPath: [VirtualBrowseSegment] = []
 
+    /// Stable reference — never assign this from a computed getter during SwiftUI body.
     public let rootStore: LibraryRootStore
 
-    public init(rootStore: LibraryRootStore = .shared) {
+    public init(rootStore: LibraryRootStore) {
         self.rootStore = rootStore
+    }
+
+    public init() {
+        self.rootStore = .shared
     }
 
     public var isAtLibraryHome: Bool { selectedRootID == nil }
@@ -60,10 +65,12 @@ public final class LibraryBrowseState {
 
     public func openRoot(_ root: LibraryRoot) {
         guard let url = rootStore.resolveURL(for: root) else { return }
-        selectedRootID = root.id
-        currentDirectory = url
         folderTrail = []
         virtualPath = []
+        // Set destination path before selection so reload never lands on a nil directory
+        // for a selected root (which briefly showed the empty state).
+        currentDirectory = url
+        selectedRootID = root.id
     }
 
     public func goToLibraryHome() {
@@ -141,7 +148,7 @@ public final class LibraryBrowseState {
         crumbs.append(BrowseBreadcrumb(
             id: "root-\(root.id.uuidString)",
             title: root.name,
-            systemImage: "externaldrive.fill",
+            systemImage: root.isBuiltIn ? "film.stack.fill" : "externaldrive.fill",
             kind: .root,
             isCurrent: atRootFolder
         ))

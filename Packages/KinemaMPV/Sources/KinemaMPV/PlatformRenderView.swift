@@ -78,11 +78,20 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        if let window {
-            contentScaleFactor = window.screen.nativeScale
+        let scale = window?.screen.nativeScale ?? contentScaleFactor
+        let pixelW = Int((bounds.width * scale).rounded())
+        let pixelH = Int((bounds.height * scale).rounded())
+        if abs(contentScaleFactor - scale) > 0.01 {
+            contentScaleFactor = scale
+            bufferNeedsReset = true
         }
-        bufferNeedsReset = true
-        scheduleRedraw()
+        if pixelW != Int(pixelWidth) || pixelH != Int(pixelHeight) {
+            bufferNeedsReset = true
+        }
+        // Avoid scheduling a redraw storm from unrelated layout passes while idle.
+        if renderContext != nil {
+            scheduleRedraw()
+        }
     }
 
     public override func didMoveToWindow() {

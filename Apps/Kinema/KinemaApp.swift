@@ -4,6 +4,7 @@ import KinemaCore
 import KinemaUI
 import KinemaPlayback
 import KinemaPlugins
+import KinemaSharing
 
 @main
 struct KinemaApp: App {
@@ -23,7 +24,20 @@ struct KinemaApp: App {
                 }
                 .onAppear {
                     _ = SubtitleFontRegistry.prepare()
+                    // Defer library I/O and Wi‑Fi so the first frame can paint.
+                    Task { @MainActor in
+                        LibraryRootStore.shared.prepareLibraryServices()
+                        syncWiFiSharing()
+                    }
                     Task { await PluginRegistry.shared.activateAll(for: viewModel.session) }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        Task { @MainActor in
+                            LibraryRootStore.shared.handleAppBecameActive()
+                            WiFiSharingServer.shared.refreshAddress()
+                        }
+                    }
                 }
         }
         .modelContainer(try! HistoryStore.container())
@@ -56,6 +70,13 @@ struct KinemaApp: App {
             return
         }
 
+        // Avoid opening incomplete Finder/USB copies — that fights AFC and drops the link.
+        if url.isFileURL,
+           LibraryMediaPaths.isInsideBuiltInLibrary(url),
+           !LibraryMediaPaths.isStableMediaFile(url) {
+            return
+        }
+
         Task {
             viewModel.session.grantFileAccess(to: url)
             await viewModel.open(url)
@@ -75,6 +96,18 @@ struct KinemaApp: App {
         Task {
             viewModel.session.grantFileAccess(to: mediaURL)
             await viewModel.open(mediaURL)
+        }
+    }
+
+    private func syncWiFiSharing() {
+        let prefs = PreferencesStore.shared.preferences
+        if prefs.wifiSharingEnabled {
+            _ = WiFiSharingServer.shared.start(
+                passcode: prefs.wifiSharingPasscode,
+                preferIPv6: prefs.wifiSharingPreferIPv6
+            )
+        } else {
+            WiFiSharingServer.shared.stop()
         }
     }
 

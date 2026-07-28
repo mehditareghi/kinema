@@ -129,11 +129,13 @@ public struct RootView: View {
         PlayerView(viewModel: viewModel)
         #else
         ZStack {
-            PlayerView(viewModel: viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(viewModel.isInPlayer ? 1 : 0)
-                .allowsHitTesting(viewModel.isInPlayer)
-                .accessibilityHidden(!viewModel.isInPlayer)
+            // Keep the GLES / OpenGL surface out of the hierarchy until playback.
+            // Mounting it under opacity 0 still lays it out and can burn CPU.
+            if viewModel.isInPlayer {
+                PlayerView(viewModel: viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            }
 
             LibraryShellView(viewModel: viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

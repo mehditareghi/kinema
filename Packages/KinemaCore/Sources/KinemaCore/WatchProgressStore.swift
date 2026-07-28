@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WatchProgressEntry: Codable, Identifiable, Sendable {
+public struct WatchProgressEntry: Codable, Identifiable, Sendable, Equatable {
     public var mediaID: String
     public var title: String
     public var urlString: String
@@ -11,7 +11,15 @@ public struct WatchProgressEntry: Codable, Identifiable, Sendable {
 
     public var id: String { mediaID }
 
-    public var url: URL? { URL(string: urlString) }
+    public var url: URL? {
+        if let recovered = PlaybackHistoryEntry.recoverFileURL(fromStoredPathOrURL: urlString) {
+            return recovered
+        }
+        if let recovered = PlaybackHistoryEntry.recoverFileURL(fromStoredPathOrURL: mediaID) {
+            return recovered
+        }
+        return URL(string: urlString)
+    }
 
     public var progress: Double {
         guard duration > 0 else { return 0 }
@@ -26,6 +34,7 @@ public struct WatchProgressEntry: Codable, Identifiable, Sendable {
 @MainActor
 public enum WatchProgressStore {
     private static let fileName = "watch-progress.json"
+    private static var didMigrateStableIDs = false
 
     public static func mediaID(for url: URL) -> String {
         PlaybackHistoryEntry.mediaID(for: url)
@@ -82,7 +91,8 @@ public enum WatchProgressStore {
     public static func record(
         item: MediaItem,
         position: TimeInterval,
-        duration: TimeInterval
+        duration: TimeInterval,
+        notify: Bool = true
     ) -> WatchProgressEntry? {
         let established = hasEstablishedPlayback(position: position, duration: duration)
         var entries = loadAll()
@@ -94,12 +104,15 @@ public enum WatchProgressStore {
             guard established else { return entries[index] }
 
             entries[index].title = item.title
+            entries[index].urlString = item.url.absoluteString
             entries[index].lastPosition = position
             entries[index].duration = max(duration, entries[index].duration)
             entries[index].lastPlayedAt = now
             entries[index].playCount += 1
             save(entries)
-            EventBus.shared.emit(.watchProgressUpdated)
+            if notify {
+                EventBus.shared.emit(.watchProgressUpdated)
+            }
             return entries[index]
         }
 
@@ -116,32 +129,86 @@ public enum WatchProgressStore {
         )
         entries.append(entry)
         save(entries)
-        EventBus.shared.emit(.watchProgressUpdated)
+        if notify {
+            EventBus.shared.emit(.watchProgressUpdated)
+        }
         return entry
     }
 
     public static func markWatched(item: MediaItem, duration: TimeInterval) {
-        guard duration > 0 else { return }
+        let resolvedDuration = duration > 0 ? duration : 1
         var entries = loadAll()
         let id = mediaID(for: item.url)
         let now = Date()
 
         if let index = entries.firstIndex(where: { $0.mediaID == id }) {
+            let knownDuration = max(entries[index].duration, resolvedDuration)
             entries[index].title = item.title
-            entries[index].lastPosition = duration
-            entries[index].duration = duration
+            entries[index].urlString = item.url.absoluteString
+            entries[index].lastPosition = knownDuration
+            entries[index].duration = knownDuration
             entries[index].lastPlayedAt = now
         } else {
             entries.append(WatchProgressEntry(
                 mediaID: id,
                 title: item.title,
                 urlString: item.url.absoluteString,
-                lastPosition: duration,
-                duration: duration,
+                lastPosition: resolvedDuration,
+                duration: resolvedDuration,
                 lastPlayedAt: now,
                 playCount: 0
             ))
         }
+        save(entries)
+        EventBus.shared.emit(.watchProgressUpdated)
+    }
+
+    /// Marks every media URL as watched (uses known duration when available).
+    public static func markAllWatched(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        var entries = loadAll()
+        let now = Date()
+        var changed = false
+
+        for url in urls {
+            let id = mediaID(for: url)
+            let title = url.deletingPathExtension().lastPathComponent
+            if let index = entries.firstIndex(where: { $0.mediaID == id }) {
+                let duration = max(entries[index].duration, 1)
+                if entries[index].lastPosition < duration - 10 || entries[index].duration != duration {
+                    entries[index].title = title
+                    entries[index].urlString = url.absoluteString
+                    entries[index].duration = duration
+                    entries[index].lastPosition = duration
+                    entries[index].lastPlayedAt = now
+                    changed = true
+                }
+            } else {
+                entries.append(WatchProgressEntry(
+                    mediaID: id,
+                    title: title,
+                    urlString: url.absoluteString,
+                    lastPosition: 1,
+                    duration: 1,
+                    lastPlayedAt: now,
+                    playCount: 0
+                ))
+                changed = true
+            }
+        }
+
+        guard changed else { return }
+        save(entries)
+        EventBus.shared.emit(.watchProgressUpdated)
+    }
+
+    public static func markAllUnwatched(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        let ids = Set(urls.map(mediaID(for:)))
+        var entries = loadAll()
+        let originalCount = entries.count
+        entries.removeAll { ids.contains($0.mediaID) }
+        guard entries.count != originalCount else { return }
         save(entries)
         EventBus.shared.emit(.watchProgressUpdated)
     }
@@ -192,8 +259,55 @@ public enum WatchProgressStore {
 
     private static func loadAll() -> [WatchProgressEntry] {
         let url = storeURL()
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([WatchProgressEntry].self, from: data)) ?? []
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([WatchProgressEntry].self, from: data) else {
+            return []
+        }
+        let migrated = migrateStableMediaIDs(decoded)
+        if !didMigrateStableIDs {
+            didMigrateStableIDs = true
+            if migrated != decoded {
+                save(migrated)
+            }
+        }
+        return migrated
+    }
+
+    /// Rewrite legacy absolute-path media IDs to container-relative ones.
+    private static func migrateStableMediaIDs(_ entries: [WatchProgressEntry]) -> [WatchProgressEntry] {
+        var migrated: [WatchProgressEntry] = []
+        migrated.reserveCapacity(entries.count)
+
+        for entry in entries {
+            var updated = entry
+
+            if let liveURL = entry.url {
+                updated.mediaID = mediaID(for: liveURL)
+                updated.urlString = liveURL.absoluteString
+            } else {
+                let rawPath: String
+                if entry.mediaID.hasPrefix("container:") {
+                    rawPath = String(entry.mediaID.dropFirst("container:".count))
+                } else if entry.mediaID.hasPrefix("/") {
+                    rawPath = entry.mediaID
+                } else if let fileURL = URL(string: entry.urlString), fileURL.isFileURL {
+                    rawPath = fileURL.path
+                } else {
+                    rawPath = entry.mediaID
+                }
+                updated.mediaID = PlaybackHistoryEntry.stableFileMediaID(path: rawPath)
+            }
+
+            if let existingIndex = migrated.firstIndex(where: { $0.mediaID == updated.mediaID }) {
+                if updated.lastPlayedAt >= migrated[existingIndex].lastPlayedAt {
+                    migrated[existingIndex] = updated
+                }
+            } else {
+                migrated.append(updated)
+            }
+        }
+
+        return migrated
     }
 
     private static func save(_ entries: [WatchProgressEntry]) {

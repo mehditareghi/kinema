@@ -17,6 +17,9 @@ let package = Package(
             resources: [
                 .process("Resources/DefaultKeyBindings.json"),
                 .copy("Resources/Fonts")
+            ],
+            linkerSettings: [
+                .linkedFramework("CoreSpotlight", .when(platforms: [.iOS, .macOS]))
             ]
         )
     ]

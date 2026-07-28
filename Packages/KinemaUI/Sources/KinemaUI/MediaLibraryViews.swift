@@ -60,6 +60,7 @@ struct MediaPosterCard: View {
 
     @State private var thumbnail: PlatformImage?
     @State private var probedDuration: TimeInterval?
+    @State private var qualityLabel: String?
     @State private var loadFailed = false
     @State private var isLoading = false
 
@@ -98,6 +99,10 @@ struct MediaPosterCard: View {
                     if let progress, progress.duration > 0, !progress.isMostlyFinished {
                         progressStrip(progress.progress)
                     }
+
+                    if let qualityLabel, !qualityLabel.isEmpty {
+                        qualityBadge(qualityLabel)
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: MediaLibraryLayout.posterCornerRadius, style: .continuous))
@@ -122,6 +127,7 @@ struct MediaPosterCard: View {
                 isLoading = false
                 thumbnail = preview.image
                 probedDuration = preview.duration
+                qualityLabel = preview.qualityLabel
                 loadFailed = preview.image == nil
             }
     }
@@ -130,8 +136,26 @@ struct MediaPosterCard: View {
         guard let cached = VideoThumbnailLoader.cachedPreview(for: url) else { return }
         thumbnail = cached.image
         probedDuration = cached.duration
+        qualityLabel = cached.qualityLabel
         loadFailed = cached.image == nil
         isLoading = false
+    }
+
+    private func qualityBadge(_ label: String) -> some View {
+        VStack {
+            HStack {
+                Spacer(minLength: 0)
+                Text(label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.55), in: Capsule())
+                    .padding(8)
+            }
+            Spacer(minLength: 0)
+        }
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -230,7 +254,18 @@ struct MediaPosterCard: View {
                     .lineLimit(1)
                 }
             } else if let displayDuration, displayDuration > 0 {
-                Text(formatTime(displayDuration))
+                HStack(spacing: 6) {
+                    Text(formatTime(displayDuration))
+                    if let qualityLabel, !qualityLabel.isEmpty {
+                        Text("·")
+                        Text(qualityLabel)
+                    }
+                }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else if let qualityLabel, !qualityLabel.isEmpty {
+                Text(qualityLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -343,5 +378,68 @@ struct AddLibraryFolderTile: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(KinemaTheme.cardBackground.opacity(0.65), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// Same footprint as `MediaFolderTile`, with accent treatment for the built-in source.
+struct BuiltInLibrarySourceTile: View {
+    let accent: Color
+    var isFullyWatched: Bool = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [accent, accent.opacity(0.72)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 44, height: 44)
+                .overlay {
+                    Image(systemName: "film.stack.fill")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(KinemaCopy.appName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(isFullyWatched ? .secondary : .primary)
+
+                    Text(KinemaCopy.builtInSourceBadge)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(accent.opacity(0.14), in: Capsule())
+                }
+
+                Text(KinemaCopy.builtInSourceSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(accent.opacity(0.8))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(KinemaTheme.cardBackground)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(accent.opacity(0.35), lineWidth: 1.5)
+                }
+        }
+        .opacity(isFullyWatched ? 0.92 : 1)
     }
 }

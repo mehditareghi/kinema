@@ -1,6 +1,7 @@
 import SwiftUI
 import KinemaCore
 import KinemaPlayback
+import KinemaSharing
 
 public struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -232,6 +233,8 @@ public struct SettingsView: View {
             }
             #endif
 
+            WiFiSharingSettingsCard()
+
             KinemaCard(title: "Keyboard Shortcuts", icon: "keyboard") {
                 ForEach(KeyBindingDefaults.load()) { keyBinding in
                     HStack {
@@ -274,6 +277,111 @@ public struct SettingsView: View {
         )
     }
 }
+
+private struct WiFiSharingSettingsCard: View {
+    private var preferences: PreferencesStore { PreferencesStore.shared }
+    private var server: WiFiSharingServer { WiFiSharingServer.shared }
+    @State private var didCopy = false
+    @State private var refreshTick = 0
+
+    var body: some View {
+        KinemaCard(title: KinemaCopy.wifiSharing, icon: "wifi") {
+            SettingsToggleRow(
+                title: KinemaCopy.wifiSharing,
+                subtitle: KinemaCopy.wifiSharingSubtitle,
+                isOn: Binding(
+                    get: { preferences.preferences.wifiSharingEnabled },
+                    set: { enabled in
+                        preferences.preferences.wifiSharingEnabled = enabled
+                        applyServerState()
+                    }
+                )
+            )
+
+            SecureField(KinemaCopy.wifiSharingPasscode, text: Binding(
+                get: { preferences.preferences.wifiSharingPasscode },
+                set: { preferences.preferences.wifiSharingPasscode = $0 }
+            ))
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            #endif
+
+            Text(KinemaCopy.wifiSharingPasscodeHint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SettingsToggleRow(
+                title: KinemaCopy.wifiSharingPreferIPv6,
+                subtitle: "Advertise dual-stack / IPv6 LAN addresses when available.",
+                isOn: Binding(
+                    get: { preferences.preferences.wifiSharingPreferIPv6 },
+                    set: { value in
+                        preferences.preferences.wifiSharingPreferIPv6 = value
+                        if preferences.preferences.wifiSharingEnabled {
+                            applyServerState()
+                        }
+                    }
+                )
+            )
+
+            if server.isRunning, let url = server.serverURLString {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(KinemaCopy.wifiSharingURL)
+                        Text(url)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            #if os(iOS) || os(macOS)
+                            .textSelection(.enabled)
+                            #endif
+                    }
+                    Spacer()
+                    Button(didCopy ? "Copied" : KinemaCopy.copyURL) {
+                        #if os(iOS)
+                        UIPasteboard.general.string = url
+                        #elseif os(macOS)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(url, forType: .string)
+                        #endif
+                        didCopy = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .id(refreshTick)
+            } else if let error = server.lastError, preferences.preferences.wifiSharingEnabled {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .onAppear {
+            if preferences.preferences.wifiSharingEnabled {
+                applyServerState()
+            }
+            server.refreshAddress()
+            refreshTick += 1
+        }
+    }
+
+    private func applyServerState() {
+        if preferences.preferences.wifiSharingEnabled {
+            _ = server.start(
+                passcode: preferences.preferences.wifiSharingPasscode,
+                preferIPv6: preferences.preferences.wifiSharingPreferIPv6
+            )
+        } else {
+            server.stop()
+        }
+        refreshTick += 1
+    }
+}
+
+#if os(iOS)
+import UIKit
+#endif
+#if os(macOS)
+import AppKit
+#endif
 
 private struct SettingsToggleRow: View {
     let title: String

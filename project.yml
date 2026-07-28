@@ -31,6 +31,10 @@ packages:
     path: Packages/KinemaMedia
   KinemaPlugins:
     path: Packages/KinemaPlugins
+  KinemaSharing:
+    path: Packages/KinemaSharing
+  GCDWebServer:
+    path: Vendor/GCDWebServer
 
 settings:
   base:
@@ -51,6 +55,8 @@ targetTemplates:
     dependencies:
       - package: KinemaUI
       - package: KinemaPlugins
+      - package: KinemaSharing
+      - package: GCDWebServer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.kinema.app
@@ -67,6 +73,10 @@ targetTemplates:
       path: Apps/Kinema/Info.plist
       properties:
         LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true
+        NSLocalNetworkUsageDescription: "Kinema uses the local network for Wi‑Fi Sharing so you can upload and download media from a computer on the same network."
+        NSBonjourServices:
+          - _http._tcp.
         CFBundleURLTypes:
           - CFBundleURLName: io.kinema.app
             CFBundleURLSchemes:

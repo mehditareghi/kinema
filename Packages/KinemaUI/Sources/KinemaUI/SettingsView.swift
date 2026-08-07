@@ -54,10 +54,18 @@ public struct SettingsView: View {
         VStack(spacing: 16) {
             KinemaCard(title: "Playback", icon: "play.circle") {
                 SettingsToggleRow(title: "Resume playback", subtitle: "Continue videos from the last watched position.", isOn: binding(\.resumePlayback))
-                SettingsSliderRow(title: "Default volume", valueText: "\(Int(preferences.preferences.volume))%", value: binding(\.volume), range: 0...100)
-                SettingsSliderRow(title: "Playback speed", valueText: String(format: "%.2gx", preferences.preferences.speed), value: binding(\.speed), range: 0.25...4, step: 0.25)
+                SettingsSliderRow(title: "Default volume", valueText: "\(Int(preferences.preferences.volume))%", value: Binding(
+                    get: { preferences.preferences.volume },
+                    set: { PlayerSessionPool.sharedSession().setVolume($0) }
+                ), range: 0...KinemaPreferences.volumeMax)
+                SettingsSliderRow(title: "Playback speed", valueText: String(format: "%.2gx", preferences.preferences.speed), value: Binding(
+                    get: { preferences.preferences.speed },
+                    set: { PlayerSessionPool.sharedSession().setSpeed($0) }
+                ), range: 0.25...4, step: 0.25)
                 SettingsToggleRow(title: "Hardware decoding", subtitle: "Use VideoToolbox/mpv hardware paths when available.", isOn: binding(\.hardwareDecoding))
             }
+
+            AudioSettingsCard()
 
             KinemaCard(title: KinemaCopy.captions, icon: "captions.bubble") {
                 SettingsToggleRow(
@@ -264,6 +272,92 @@ public struct SettingsView: View {
             get: { preferences.preferences[keyPath: keyPath] },
             set: { preferences.preferences[keyPath: keyPath] = $0 }
         )
+    }
+}
+
+private struct AudioSettingsCard: View {
+    private var preferences: PreferencesStore { PreferencesStore.shared }
+    @State private var devices: [PlayerSession.AudioOutputDevice] = []
+
+    var body: some View {
+        KinemaCard(title: KinemaCopy.audio, icon: "speaker.wave.3") {
+            SettingsMenuRow(
+                title: "Preferred language",
+                value: SubtitlePreferenceCatalog.language(id: preferences.preferences.preferredAudioLanguage).displayName
+            ) {
+                ForEach(SubtitlePreferenceCatalog.popularLanguages) { language in
+                    Button(language.displayName) {
+                        preferences.preferences.preferredAudioLanguage = language.id
+                    }
+                }
+            }
+
+            SettingsMenuRow(
+                title: "Replay Gain",
+                value: preferences.preferences.replayGain.displayName
+            ) {
+                ForEach(AudioReplayGainMode.allCases) { mode in
+                    Button(mode.displayName) {
+                        preferences.preferences.replayGain = mode
+                        PlayerSessionPool.sharedSession().applyAudioPipeline()
+                    }
+                }
+            }
+
+            SettingsMenuRow(
+                title: "Output module",
+                value: preferences.preferences.audioOutputModule.displayName
+            ) {
+                ForEach(AudioOutputModule.available) { module in
+                    Button(module.displayName) {
+                        preferences.preferences.audioOutputModule = module
+                    }
+                }
+            }
+
+            SettingsMenuRow(
+                title: "Output device",
+                value: selectedDeviceLabel
+            ) {
+                Button("System default") {
+                    preferences.preferences.audioOutputDeviceID = ""
+                    PlayerSessionPool.sharedSession().applyAudioPipeline()
+                }
+                ForEach(devices) { device in
+                    Button(device.description) {
+                        preferences.preferences.audioOutputDeviceID = device.id
+                        PlayerSessionPool.sharedSession().applyAudioPipeline()
+                    }
+                }
+            }
+
+            SettingsToggleRow(
+                title: "Audio visualization",
+                subtitle: "Show reactive bars while playing.",
+                isOn: Binding(
+                    get: { preferences.preferences.audioVisualizationEnabled },
+                    set: { preferences.preferences.audioVisualizationEnabled = $0 }
+                )
+            )
+
+            Text("Equalizer and effects are available from the player Audio sheet. Output module changes apply the next time the player starts.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            refreshDevices()
+        }
+    }
+
+    private var selectedDeviceLabel: String {
+        let id = preferences.preferences.audioOutputDeviceID
+        if id.isEmpty { return "System default" }
+        return devices.first(where: { $0.id == id })?.description ?? id
+    }
+
+    private func refreshDevices() {
+        let session = PlayerSessionPool.sharedSession()
+        devices = session.audioOutputDevices()
     }
 }
 

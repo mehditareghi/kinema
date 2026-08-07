@@ -36,6 +36,14 @@ public final class PlayerSession: PlaybackEngine {
         tracks.filter { $0.kind == .subtitle }
     }
 
+    public var audioTracks: [Track] {
+        tracks.filter { $0.kind == .audio }
+    }
+
+    public var activeAudioTrack: Track? {
+        audioTracks.first(where: \.isSelected)
+    }
+
     public var embeddedSubtitleTracks: [Track] {
         subtitleTracks.filter { !$0.isExternal }
     }
@@ -122,6 +130,8 @@ public final class PlayerSession: PlaybackEngine {
         #if os(macOS)
         controller.setVolume(preferences.volume)
         controller.setSpeed(preferences.speed)
+        controller.setMute(preferences.isMuted)
+        applyAudioPipeline()
         isPrepared = true
         #endif
     }
@@ -163,6 +173,8 @@ public final class PlayerSession: PlaybackEngine {
         let options = PreferencesStore.shared.preferences
         controller.setVolume(options.volume)
         controller.setSpeed(options.speed)
+        controller.setMute(options.isMuted)
+        applyAudioPipeline()
         isPrepared = true
     }
 
@@ -437,8 +449,9 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     public func setVolume(_ volume: Double) {
-        controller.setVolume(volume)
-        PreferencesStore.shared.preferences.volume = volume
+        let clamped = min(KinemaPreferences.volumeMax, max(0, volume))
+        controller.setVolume(clamped)
+        PreferencesStore.shared.preferences.volume = clamped
         refreshInfo(force: true)
     }
 
@@ -450,7 +463,68 @@ public final class PlayerSession: PlaybackEngine {
 
     public func setMuted(_ muted: Bool) {
         controller.setMute(muted)
+        PreferencesStore.shared.preferences.isMuted = muted
         refreshInfo(force: true)
+    }
+
+    public func applyAudioPipeline() {
+        guard isPrepared || controller.isReady else { return }
+        let prefs = PreferencesStore.shared.preferences
+        controller.setAudioFilters(AudioFilterGraph.build(from: prefs))
+        controller.setReplayGain(prefs.replayGain.mpvValue)
+        let device = prefs.audioOutputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        controller.setAudioDevice(device.isEmpty ? "auto" : device)
+    }
+
+    public struct AudioOutputDevice: Identifiable, Hashable, Sendable {
+        public let id: String
+        public let description: String
+    }
+
+    public func audioOutputDevices() -> [AudioOutputDevice] {
+        controller.audioDeviceList().map {
+            AudioOutputDevice(id: $0.id, description: $0.description)
+        }
+    }
+
+    public func selectAudioTrack(id: Int?) {
+        if let id {
+            controller.selectTrack(id: id, kind: .audio)
+            let label = audioTracks.first(where: { $0.id == id }).map(Self.audioTrackLabel) ?? "Audio \(id)"
+            controller.showOSD(label)
+        } else {
+            controller.disableAudioTrack()
+            controller.showOSD("Audio off")
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            refreshTracks(force: true)
+        }
+    }
+
+    public func cycleAudio() {
+        controller.cycleAudio()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            refreshTracks(force: true)
+            if let track = activeAudioTrack {
+                controller.showOSD(Self.audioTrackLabel(track))
+            }
+        }
+    }
+
+    public static func audioTrackLabel(_ track: Track) -> String {
+        var parts: [String] = []
+        if let language = track.language, !language.isEmpty {
+            parts.append(language.uppercased())
+        }
+        if !track.title.isEmpty {
+            parts.append(track.title)
+        }
+        if parts.isEmpty {
+            parts.append("Audio \(track.id)")
+        }
+        return parts.joined(separator: " · ")
     }
 
     public func addToPlaylist(_ items: [MediaItem]) {
@@ -1167,6 +1241,8 @@ public final class PlayerSession: PlaybackEngine {
                     try? await Task.sleep(for: .milliseconds(350))
                     refreshTracks(force: true)
                     applyLiveSubtitlePreferences()
+                    applyAudioPipeline()
+                    applyPreferredAudioLanguage()
                     await restoreSubtitleSession(for: item)
                 }
             }
@@ -1182,6 +1258,33 @@ public final class PlayerSession: PlaybackEngine {
             // never arrive — advance the playlist from eof-reached instead.
             if controller.hasReachedEOF {
                 handlePlaybackFinished()
+            }
+        }
+    }
+
+    private func applyPreferredAudioLanguage() {
+        let preferred = PreferencesStore.shared.preferences.preferredAudioLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !preferred.isEmpty else { return }
+        let candidates = audioTracks
+        guard !candidates.isEmpty else { return }
+
+        // If a track is already selected and matches preference, keep it.
+        if let active = activeAudioTrack,
+           (active.language ?? "").lowercased().hasPrefix(preferred) {
+            return
+        }
+
+        let match = candidates.first(where: {
+            ($0.language ?? "").lowercased().hasPrefix(preferred)
+        }) ?? candidates.first(where: \.isDefault)
+
+        if let match, !match.isSelected {
+            controller.selectTrack(id: match.id, kind: .audio)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                refreshTracks(force: true)
             }
         }
     }

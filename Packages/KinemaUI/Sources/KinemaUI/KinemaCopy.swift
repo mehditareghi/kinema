@@ -110,6 +110,7 @@ public enum KinemaCopy {
 
     public static let lineup = "Lineup"
     public static let preferences = "Preferences"
+    public static let audio = "Audio"
     public static let captions = "Subtitles"
     public static let captionsOff = "Off"
     public static let captionsEmbedded = "In this video"

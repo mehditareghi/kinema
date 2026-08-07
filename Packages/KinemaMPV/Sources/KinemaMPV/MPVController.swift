@@ -69,18 +69,24 @@ public final class MPVController: @unchecked Sendable {
     private func configureEngine(options: [String: String]) throws {
         #if os(macOS)
         try setOption(name: MPVOption.vo.rawValue, value: "libmpv")
-        try setOption(name: "ao", value: "coreaudio")
+        if options["ao"] == nil {
+            try setOption(name: "ao", value: "coreaudio")
+        }
         try setOption(name: "video-timing-offset", value: "0")
         try setOption(name: "audio-buffer", value: "0.1")
         #elseif os(iOS) || os(tvOS)
         try setOption(name: MPVOption.vo.rawValue, value: "libmpv")
-        try setOption(name: "ao", value: "audiounit")
+        if options["ao"] == nil {
+            try setOption(name: "ao", value: "audiounit")
+        }
         try setOption(name: "keepaspect", value: "yes")
         try setOption(name: "keepaspect-window", value: "yes")
         try setOption(name: "video-unscaled", value: "no")
         try setOption(name: "demuxer-lavf-analyzeduration", value: "1")
         try setOption(name: "cache-pause-initial", value: "yes")
         #endif
+
+        try setOption(name: "volume-max", value: "200")
 
         try setOption(name: MPVOption.keepOpen.rawValue, value: "yes")
         try setOption(name: MPVOption.hrSeek.rawValue, value: "yes")
@@ -192,6 +198,7 @@ public final class MPVController: @unchecked Sendable {
             MPVProperty.subDelay.rawValue,
             MPVProperty.secondarySubDelay.rawValue,
             MPVProperty.audioDelay.rawValue,
+            MPVProperty.mute.rawValue,
             MPVProperty.eofReached.rawValue
         ])
 
@@ -267,6 +274,51 @@ public final class MPVController: @unchecked Sendable {
 
     public func setMute(_ muted: Bool) {
         setProperty(MPVProperty.mute.rawValue, flag: muted ? 1 : 0)
+    }
+
+    public func isMuted() -> Bool {
+        guard isInitialized, !isShuttingDown else { return false }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return false }
+            return (getFlag(MPVProperty.mute.rawValue) ?? 0) != 0
+        }
+    }
+
+    public func setAudioFilters(_ filterGraph: String?) {
+        let value = (filterGraph?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? ""
+        setStringOption(MPVProperty.af.rawValue, value.isEmpty ? "" : value)
+    }
+
+    public func clearAudioFilters() {
+        setAudioFilters(nil)
+    }
+
+    public func setReplayGain(_ mode: String) {
+        setStringOption(MPVProperty.replaygain.rawValue, mode)
+    }
+
+    public func setAudioDevice(_ deviceID: String) {
+        let trimmed = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        setStringOption(MPVProperty.audioDevice.rawValue, trimmed.isEmpty ? "auto" : trimmed)
+    }
+
+    public func cycleAudio() {
+        commandQueue.async { [weak self] in
+            self?.command(["cycle", "audio"])
+        }
+    }
+
+    public struct AudioDevice: Sendable, Identifiable, Hashable {
+        public let id: String
+        public let description: String
+    }
+
+    public func audioDeviceList() -> [AudioDevice] {
+        guard isInitialized, !isShuttingDown else { return [] }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, let handle else { return [] }
+            return MPVAudioDevices.parse(from: handle)
+        }
     }
 
     public func setVideoEnabled(_ enabled: Bool) {
@@ -479,6 +531,12 @@ public final class MPVController: @unchecked Sendable {
         }
         commandQueue.async { [weak self] in
             self?.command(["set", name, "\(id)"])
+        }
+    }
+
+    public func disableAudioTrack() {
+        commandQueue.async { [weak self] in
+            self?.command(["set", "aid", "no"])
         }
     }
 

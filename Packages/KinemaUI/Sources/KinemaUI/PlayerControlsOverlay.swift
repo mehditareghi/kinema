@@ -9,6 +9,7 @@ public struct PlayerControlsOverlay: View {
 
     @State private var scrubPosition: Double = 0
     @State private var isScrubbing = false
+    @State private var chromeWidth: CGFloat = 0
 
     public init(viewModel: PlayerViewModel, accent: Color) {
         self.viewModel = viewModel
@@ -79,6 +80,13 @@ public struct PlayerControlsOverlay: View {
 
     // MARK: - Bottom
 
+    private var speedStyle: PlaybackSpeedControl.Style {
+        // Prefer menu until we have a real measurement — never stick on the wide
+        // slider because chromeWidth was still 0.
+        guard chromeWidth > 1 else { return .menu }
+        return chromeWidth >= PlaybackSpeedControl.inlineMinChromeWidth ? .inlineSteps : .menu
+    }
+
     private var bottomChrome: some View {
         VStack(spacing: 10) {
             HStack {
@@ -111,10 +119,8 @@ public struct PlayerControlsOverlay: View {
             .frame(maxWidth: .infinity)
             .frame(height: progressHeight)
 
-            // One row under the scrubber — same height budget as before, so the
-            // timeline stays where it was; transport sits in the middle.
             ZStack {
-                HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: 10) {
                     iconButton(
                         viewModel.session.subtitlesAreActive ? "captions.bubble.fill" : "captions.bubble",
                         label: KinemaCopy.captions
@@ -123,17 +129,31 @@ public struct PlayerControlsOverlay: View {
                         viewModel.showSubtitles = true
                     }
 
-                    Spacer(minLength: 12)
+                    Spacer(minLength: 8)
 
-                    iconButton("gearshape", label: KinemaCopy.preferences) {
+                    PlaybackSpeedControl(
+                        viewModel: viewModel,
+                        accent: accent,
+                        style: speedStyle
+                    )
+
+                    iconButton("slider.horizontal.3", label: KinemaCopy.audio) {
                         viewModel.cancelAutoHideControls()
-                        viewModel.showSettings = true
+                        viewModel.showAudio = true
                     }
                 }
 
                 transportControls
             }
             .frame(height: 52)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .task(id: geo.size.width) {
+                            chromeWidth = geo.size.width
+                        }
+                }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 8)

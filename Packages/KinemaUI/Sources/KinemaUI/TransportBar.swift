@@ -18,7 +18,6 @@ public struct TransportBar: View {
     public var body: some View {
         VStack(spacing: 14) {
             progressRow
-            SpeedPickerStrip(viewModel: viewModel, accent: accent)
             controlsRow
         }
         .padding(.horizontal, 18)
@@ -94,6 +93,7 @@ public struct TransportBar: View {
             }
 
             Spacer(minLength: 4)
+            PlaybackSpeedControl(viewModel: viewModel, accent: accent, style: .menu)
             PlayerToolsMenu(viewModel: viewModel, accent: accent)
         }
         .foregroundStyle(.white)
@@ -110,82 +110,9 @@ public struct TransportBar: View {
     }
 }
 
-private struct SpeedPickerStrip: View {
-    @Bindable var viewModel: PlayerViewModel
-    let accent: Color
-
-    private let speeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                nudgeSpeed(by: -0.25)
-            } label: {
-                Image(systemName: "minus")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.08), in: Circle())
-            }
-            .buttonStyle(.plain)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(speeds, id: \.self) { speed in
-                        speedChip(speed)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-
-            Button {
-                nudgeSpeed(by: 0.25)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.bold))
-                    .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.08), in: Circle())
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(.white)
-    }
-
-    private func speedChip(_ speed: Double) -> some View {
-        let selected = abs(viewModel.session.info.speed - speed) < 0.01
-        return Button {
-            viewModel.session.setSpeed(speed)
-            viewModel.showOSD(String(format: "%.2g×", speed))
-            viewModel.scheduleHideControls()
-        } label: {
-            Text(String(format: "%.2g×", speed))
-                .font(.caption.weight(selected ? .bold : .medium).monospacedDigit())
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background {
-                    if selected {
-                        Capsule().fill(accent.opacity(0.35))
-                        Capsule().strokeBorder(accent.opacity(0.6), lineWidth: 1)
-                    } else {
-                        Capsule().fill(.white.opacity(0.08))
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.15), value: viewModel.session.info.speed)
-    }
-
-    private func nudgeSpeed(by delta: Double) {
-        let next = min(4, max(0.25, viewModel.session.info.speed + delta))
-        viewModel.session.setSpeed(next)
-        viewModel.showOSD(String(format: "%.2g×", next))
-        viewModel.scheduleHideControls()
-    }
-}
-
 struct PlayerToolsMenu: View {
     @Bindable var viewModel: PlayerViewModel
     let accent: Color
-    @State private var showSettings = false
 
     var body: some View {
         Menu {
@@ -194,6 +121,9 @@ struct PlayerToolsMenu: View {
             }
             Button { viewModel.showSubtitles = true } label: {
                 Label(KinemaCopy.captions, systemImage: "captions.bubble")
+            }
+            Button { viewModel.showAudio = true } label: {
+                Label(KinemaCopy.audio, systemImage: "slider.horizontal.3")
             }
             Divider()
             Button {
@@ -208,10 +138,6 @@ struct PlayerToolsMenu: View {
                 Label("Fullscreen", systemImage: "arrow.up.left.and.arrow.down.right")
             }
             #endif
-            Divider()
-            Button { showSettings = true } label: {
-                Label(KinemaCopy.preferences, systemImage: "gearshape")
-            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.body.weight(.semibold))
@@ -220,12 +146,6 @@ struct PlayerToolsMenu: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .sheet(isPresented: $showSettings) { SettingsView() }
-        .onChange(of: showSettings) { _, isShowing in
-            if isShowing {
-                viewModel.cancelAutoHideControls()
-            }
-        }
     }
 }
 

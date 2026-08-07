@@ -21,6 +21,7 @@ public final class PlayerViewModel {
     public var isMuted = false
     public var showPlaylist = false
     public var showSubtitles = false
+    public var showAudio = false
     public var showSettings = false
     public var librarySection: LibrarySection = .collection
     public let libraryBrowse = LibraryBrowseState()
@@ -33,6 +34,7 @@ public final class PlayerViewModel {
 
     public init(session: PlayerSession? = nil) {
         self.session = session ?? PlayerSessionPool.sharedSession()
+        self.isMuted = PreferencesStore.shared.preferences.isMuted
         eventBusToken = EventBus.shared.subscribe { [weak self] event in
             Task { @MainActor in
                 self?.handleEvent(event)
@@ -133,13 +135,13 @@ public final class PlayerViewModel {
         }
     }
 
-    public func scheduleHideControls() {
-        guard isInPlayer, !showSettings else { return }
+    public func scheduleHideControls(after seconds: TimeInterval = 4) {
+        guard isInPlayer, !showSettings, !showAudio else { return }
         hideControlsTask?.cancel()
         hideControlsTask = Task {
-            try? await Task.sleep(for: .seconds(4))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            guard !showSettings else { return }
+            guard !showSettings, !showAudio else { return }
             withAnimation(.easeOut(duration: 0.25)) {
                 showControls = false
             }
@@ -168,7 +170,7 @@ public final class PlayerViewModel {
         case "seek-back-5": session.seekRelative(-5)
         case "seek-forward-5": session.seekRelative(5)
         case "pause": session.pause()
-        case "volume-up": session.setVolume(min(100, session.info.volume + 5))
+        case "volume-up": session.setVolume(min(KinemaPreferences.volumeMax, session.info.volume + 5))
         case "volume-down": session.setVolume(max(0, session.info.volume - 5))
         case "mute":
             isMuted.toggle()
@@ -176,6 +178,7 @@ public final class PlayerViewModel {
         case "speed-up": session.setSpeed(min(4, session.info.speed + 0.25))
         case "speed-down": session.setSpeed(max(0.25, session.info.speed - 0.25))
         case "subtitle-cycle": session.cycleSubtitle()
+        case "audio-cycle": session.cycleAudio()
         case "subtitle-delay-down": session.adjustSubtitleDelay(by: -0.1)
         case "subtitle-delay-up": session.adjustSubtitleDelay(by: 0.1)
         case "subtitle-bookmark-audio": session.markBookmarkAudio()

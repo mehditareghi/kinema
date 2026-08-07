@@ -55,7 +55,7 @@ struct PlayerSideGestureOverlay: View {
 
     private var volumeFraction: Double {
         if viewModel.isMuted { return 0 }
-        return min(1, max(0, viewModel.session.info.volume / 100))
+        return min(1, max(0, viewModel.session.info.volume / KinemaPreferences.volumeMax))
     }
 
     var body: some View {
@@ -253,7 +253,7 @@ struct PlayerSideGestureOverlay: View {
             brightness = next
             setScreenBrightness(next)
         case .volume:
-            viewModel.session.setVolume(next * 100)
+            viewModel.session.setVolume(next * KinemaPreferences.volumeMax)
         }
     }
 
@@ -302,7 +302,15 @@ struct PlayerSideGestureOverlay: View {
     // MARK: - Rail chrome
 
     private func sideRail(kind: SideControl, progress: Double, accessibility: String) -> some View {
-        let percent = Int((progress * 100).rounded())
+        let percent: Int = {
+            switch kind {
+            case .volume:
+                if viewModel.isMuted { return 0 }
+                return Int(viewModel.session.info.volume.rounded())
+            case .brightness:
+                return Int((progress * 100).rounded())
+            }
+        }()
         return VStack(spacing: 10) {
             railIcon(kind: kind, progress: progress)
 
@@ -328,11 +336,11 @@ struct PlayerSideGestureOverlay: View {
             Text("\(percent)%")
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.78))
-                .frame(width: 36, alignment: .center)
+                .frame(width: 40, alignment: .center)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.75)
         }
-        .frame(width: 36)
+        .frame(width: 40)
         .transaction { $0.animation = nil }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility)

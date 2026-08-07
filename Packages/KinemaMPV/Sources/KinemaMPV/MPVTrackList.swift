@@ -128,7 +128,7 @@ enum MPVTrackList {
     }
 }
 
-private enum MPVNodeValue {
+enum MPVNodeValue {
     case string(String)
     case flag(Bool)
     case int(Int)

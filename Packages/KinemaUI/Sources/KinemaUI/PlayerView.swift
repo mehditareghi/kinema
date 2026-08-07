@@ -48,8 +48,21 @@ public struct PlayerView: View {
 
             OSDOverlay(message: viewModel.osdMessage)
                 .zIndex(3)
+
+            if preferences.preferences.audioVisualizationEnabled, viewModel.isInPlayer {
+                AudioVisualizationOverlay(
+                    volume: viewModel.isMuted ? 0 : viewModel.session.info.volume,
+                    isPaused: viewModel.session.info.isPaused,
+                    isMuted: viewModel.isMuted
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, viewModel.showControls ? 120 : 36)
+                .zIndex(2)
+                .transition(.opacity)
+            }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: viewModel.showControls)
+        .animation(.easeOut(duration: 0.2), value: preferences.preferences.audioVisualizationEnabled)
         .onChange(of: viewModel.isInPlayer) { _, _ in
             ScreenWakeLock.apply(
                 playerVisible: viewModel.isInPlayer,
@@ -80,10 +93,20 @@ public struct PlayerView: View {
         .sheet(isPresented: $viewModel.showSubtitles) {
             SubtitlePickerSheet(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showAudio) {
+            AudioSheet(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showSettings) {
             SettingsView()
         }
         .onChange(of: viewModel.showSettings) { _, isShowing in
+            if isShowing {
+                viewModel.cancelAutoHideControls()
+            } else if viewModel.showControls {
+                viewModel.scheduleHideControls()
+            }
+        }
+        .onChange(of: viewModel.showAudio) { _, isShowing in
             if isShowing {
                 viewModel.cancelAutoHideControls()
             } else if viewModel.showControls {
@@ -175,6 +198,18 @@ public struct MusicModeView: View {
         }
         .padding(24)
         .frame(width: 360, height: 300)
+        .sheet(isPresented: $viewModel.showAudio) {
+            AudioSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showSubtitles) {
+            SubtitlePickerSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showPlaylist) {
+            PlaylistSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showSettings) {
+            SettingsView()
+        }
     }
 }
 #endif

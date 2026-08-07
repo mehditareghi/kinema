@@ -99,7 +99,10 @@ public enum SubtitlePreferenceCatalog {
 }
 
 public struct KinemaPreferences: Sendable {
+    public static let volumeMax: Double = 200
+
     public var volume: Double
+    public var isMuted: Bool
     public var speed: Double
     public var resumePlayback: Bool
     public var autoLoadSubtitles: Bool
@@ -132,8 +135,35 @@ public struct KinemaPreferences: Sendable {
     public var wifiSharingPasscode: String
     public var wifiSharingPreferIPv6: Bool
 
+    // MARK: Audio
+    public var preferredAudioLanguage: String
+    public var replayGain: AudioReplayGainMode
+    public var audioOutputModule: AudioOutputModule
+    public var audioOutputDeviceID: String
+    public var audioVisualizationEnabled: Bool
+    public var audioEqualizerEnabled: Bool
+    public var audioEqualizerPresetID: String
+    public var audioEqualizerBands: [Double]
+    public var audioEqualizerPreamp: Double
+    public var audioNormalizeEnabled: Bool
+    public var audioCompressorEnabled: Bool
+    public var audioCompressorThreshold: Double
+    public var audioCompressorRatio: Double
+    public var audioCompressorAttack: Double
+    public var audioCompressorRelease: Double
+    public var audioCompressorMakeup: Double
+    public var audioChannelMode: AudioChannelMode
+    public var audioStereoWidenerEnabled: Bool
+    public var audioStereoWidenerAmount: Double
+    public var audioHeadphoneVirtualizer: Bool
+    public var audioForceMono: Bool
+    public var audioPitchScale: Double
+    public var audioSpatializerEnabled: Bool
+    public var audioSpatializerAmount: Double
+
     public init(
         volume: Double = 100,
+        isMuted: Bool = false,
         speed: Double = 1,
         resumePlayback: Bool = true,
         autoLoadSubtitles: Bool = true,
@@ -162,9 +192,34 @@ public struct KinemaPreferences: Sendable {
         forcedSubtitlesOnly: Bool = false,
         wifiSharingEnabled: Bool = false,
         wifiSharingPasscode: String = "",
-        wifiSharingPreferIPv6: Bool = true
+        wifiSharingPreferIPv6: Bool = true,
+        preferredAudioLanguage: String = "en",
+        replayGain: AudioReplayGainMode = .off,
+        audioOutputModule: AudioOutputModule = .auto,
+        audioOutputDeviceID: String = "",
+        audioVisualizationEnabled: Bool = false,
+        audioEqualizerEnabled: Bool = false,
+        audioEqualizerPresetID: String = AudioEqualizerCatalog.flatID,
+        audioEqualizerBands: [Double] = Array(repeating: 0, count: 10),
+        audioEqualizerPreamp: Double = 0,
+        audioNormalizeEnabled: Bool = false,
+        audioCompressorEnabled: Bool = false,
+        audioCompressorThreshold: Double = -20,
+        audioCompressorRatio: Double = 3,
+        audioCompressorAttack: Double = 20,
+        audioCompressorRelease: Double = 250,
+        audioCompressorMakeup: Double = 2,
+        audioChannelMode: AudioChannelMode = .stereo,
+        audioStereoWidenerEnabled: Bool = false,
+        audioStereoWidenerAmount: Double = 2.5,
+        audioHeadphoneVirtualizer: Bool = false,
+        audioForceMono: Bool = false,
+        audioPitchScale: Double = 1,
+        audioSpatializerEnabled: Bool = false,
+        audioSpatializerAmount: Double = 0.35
     ) {
-        self.volume = volume
+        self.volume = min(Self.volumeMax, max(0, volume))
+        self.isMuted = isMuted
         self.speed = speed
         self.resumePlayback = resumePlayback
         self.autoLoadSubtitles = autoLoadSubtitles
@@ -194,6 +249,30 @@ public struct KinemaPreferences: Sendable {
         self.wifiSharingEnabled = wifiSharingEnabled
         self.wifiSharingPasscode = wifiSharingPasscode
         self.wifiSharingPreferIPv6 = wifiSharingPreferIPv6
+        self.preferredAudioLanguage = preferredAudioLanguage
+        self.replayGain = replayGain
+        self.audioOutputModule = audioOutputModule
+        self.audioOutputDeviceID = audioOutputDeviceID
+        self.audioVisualizationEnabled = audioVisualizationEnabled
+        self.audioEqualizerEnabled = audioEqualizerEnabled
+        self.audioEqualizerPresetID = audioEqualizerPresetID
+        self.audioEqualizerBands = AudioEqualizerCatalog.normalizedBands(audioEqualizerBands)
+        self.audioEqualizerPreamp = min(20, max(-20, audioEqualizerPreamp))
+        self.audioNormalizeEnabled = audioNormalizeEnabled
+        self.audioCompressorEnabled = audioCompressorEnabled
+        self.audioCompressorThreshold = audioCompressorThreshold
+        self.audioCompressorRatio = audioCompressorRatio
+        self.audioCompressorAttack = audioCompressorAttack
+        self.audioCompressorRelease = audioCompressorRelease
+        self.audioCompressorMakeup = audioCompressorMakeup
+        self.audioChannelMode = audioChannelMode
+        self.audioStereoWidenerEnabled = audioStereoWidenerEnabled
+        self.audioStereoWidenerAmount = audioStereoWidenerAmount
+        self.audioHeadphoneVirtualizer = audioHeadphoneVirtualizer
+        self.audioForceMono = audioForceMono
+        self.audioPitchScale = min(1.5, max(0.5, audioPitchScale))
+        self.audioSpatializerEnabled = audioSpatializerEnabled
+        self.audioSpatializerAmount = audioSpatializerAmount
     }
 }
 
@@ -205,6 +284,7 @@ public final class PreferencesStore {
     private let defaults = UserDefaults.standard
     private enum Keys {
         static let volume = "kinema.volume"
+        static let isMuted = "kinema.isMuted"
         static let speed = "kinema.speed"
         static let resumePlayback = "kinema.resumePlayback"
         static let autoLoadSubtitles = "kinema.autoLoadSubtitles"
@@ -234,6 +314,30 @@ public final class PreferencesStore {
         static let wifiSharingEnabled = "kinema.wifiSharingEnabled"
         static let wifiSharingPasscode = "kinema.wifiSharingPasscode"
         static let wifiSharingPreferIPv6 = "kinema.wifiSharingPreferIPv6"
+        static let preferredAudioLanguage = "kinema.preferredAudioLanguage"
+        static let replayGain = "kinema.replayGain"
+        static let audioOutputModule = "kinema.audioOutputModule"
+        static let audioOutputDeviceID = "kinema.audioOutputDeviceID"
+        static let audioVisualizationEnabled = "kinema.audioVisualizationEnabled"
+        static let audioEqualizerEnabled = "kinema.audioEqualizerEnabled"
+        static let audioEqualizerPresetID = "kinema.audioEqualizerPresetID"
+        static let audioEqualizerBands = "kinema.audioEqualizerBands"
+        static let audioEqualizerPreamp = "kinema.audioEqualizerPreamp"
+        static let audioNormalizeEnabled = "kinema.audioNormalizeEnabled"
+        static let audioCompressorEnabled = "kinema.audioCompressorEnabled"
+        static let audioCompressorThreshold = "kinema.audioCompressorThreshold"
+        static let audioCompressorRatio = "kinema.audioCompressorRatio"
+        static let audioCompressorAttack = "kinema.audioCompressorAttack"
+        static let audioCompressorRelease = "kinema.audioCompressorRelease"
+        static let audioCompressorMakeup = "kinema.audioCompressorMakeup"
+        static let audioChannelMode = "kinema.audioChannelMode"
+        static let audioStereoWidenerEnabled = "kinema.audioStereoWidenerEnabled"
+        static let audioStereoWidenerAmount = "kinema.audioStereoWidenerAmount"
+        static let audioHeadphoneVirtualizer = "kinema.audioHeadphoneVirtualizer"
+        static let audioForceMono = "kinema.audioForceMono"
+        static let audioPitchScale = "kinema.audioPitchScale"
+        static let audioSpatializerEnabled = "kinema.audioSpatializerEnabled"
+        static let audioSpatializerAmount = "kinema.audioSpatializerAmount"
     }
 
     public var preferences: KinemaPreferences {
@@ -243,8 +347,10 @@ public final class PreferencesStore {
     private init() {
         _ = SubtitleFontRegistry.prepare()
         let storedFont = defaults.string(forKey: Keys.subtitleFontID) ?? SubtitlePreferenceCatalog.defaultFontID
+        let storedBands = defaults.array(forKey: Keys.audioEqualizerBands) as? [Double]
         preferences = KinemaPreferences(
             volume: defaults.object(forKey: Keys.volume) as? Double ?? 100,
+            isMuted: defaults.object(forKey: Keys.isMuted) as? Bool ?? false,
             speed: defaults.object(forKey: Keys.speed) as? Double ?? 1,
             resumePlayback: defaults.object(forKey: Keys.resumePlayback) as? Bool ?? true,
             autoLoadSubtitles: defaults.object(forKey: Keys.autoLoadSubtitles) as? Bool ?? true,
@@ -273,12 +379,37 @@ public final class PreferencesStore {
             forcedSubtitlesOnly: defaults.object(forKey: Keys.forcedSubtitlesOnly) as? Bool ?? false,
             wifiSharingEnabled: defaults.object(forKey: Keys.wifiSharingEnabled) as? Bool ?? false,
             wifiSharingPasscode: defaults.string(forKey: Keys.wifiSharingPasscode) ?? "",
-            wifiSharingPreferIPv6: defaults.object(forKey: Keys.wifiSharingPreferIPv6) as? Bool ?? true
+            wifiSharingPreferIPv6: defaults.object(forKey: Keys.wifiSharingPreferIPv6) as? Bool ?? true,
+            preferredAudioLanguage: defaults.string(forKey: Keys.preferredAudioLanguage) ?? "en",
+            replayGain: AudioReplayGainMode(rawValue: defaults.string(forKey: Keys.replayGain) ?? "off") ?? .off,
+            audioOutputModule: AudioOutputModule(rawValue: defaults.string(forKey: Keys.audioOutputModule) ?? "auto") ?? .auto,
+            audioOutputDeviceID: defaults.string(forKey: Keys.audioOutputDeviceID) ?? "",
+            audioVisualizationEnabled: defaults.object(forKey: Keys.audioVisualizationEnabled) as? Bool ?? false,
+            audioEqualizerEnabled: defaults.object(forKey: Keys.audioEqualizerEnabled) as? Bool ?? false,
+            audioEqualizerPresetID: defaults.string(forKey: Keys.audioEqualizerPresetID) ?? AudioEqualizerCatalog.flatID,
+            audioEqualizerBands: storedBands ?? Array(repeating: 0, count: 10),
+            audioEqualizerPreamp: defaults.object(forKey: Keys.audioEqualizerPreamp) as? Double ?? 0,
+            audioNormalizeEnabled: defaults.object(forKey: Keys.audioNormalizeEnabled) as? Bool ?? false,
+            audioCompressorEnabled: defaults.object(forKey: Keys.audioCompressorEnabled) as? Bool ?? false,
+            audioCompressorThreshold: defaults.object(forKey: Keys.audioCompressorThreshold) as? Double ?? -20,
+            audioCompressorRatio: defaults.object(forKey: Keys.audioCompressorRatio) as? Double ?? 3,
+            audioCompressorAttack: defaults.object(forKey: Keys.audioCompressorAttack) as? Double ?? 20,
+            audioCompressorRelease: defaults.object(forKey: Keys.audioCompressorRelease) as? Double ?? 250,
+            audioCompressorMakeup: defaults.object(forKey: Keys.audioCompressorMakeup) as? Double ?? 2,
+            audioChannelMode: AudioChannelMode(rawValue: defaults.string(forKey: Keys.audioChannelMode) ?? "stereo") ?? .stereo,
+            audioStereoWidenerEnabled: defaults.object(forKey: Keys.audioStereoWidenerEnabled) as? Bool ?? false,
+            audioStereoWidenerAmount: defaults.object(forKey: Keys.audioStereoWidenerAmount) as? Double ?? 2.5,
+            audioHeadphoneVirtualizer: defaults.object(forKey: Keys.audioHeadphoneVirtualizer) as? Bool ?? false,
+            audioForceMono: defaults.object(forKey: Keys.audioForceMono) as? Bool ?? false,
+            audioPitchScale: defaults.object(forKey: Keys.audioPitchScale) as? Double ?? 1,
+            audioSpatializerEnabled: defaults.object(forKey: Keys.audioSpatializerEnabled) as? Bool ?? false,
+            audioSpatializerAmount: defaults.object(forKey: Keys.audioSpatializerAmount) as? Double ?? 0.35
         )
     }
 
     private func persist() {
         defaults.set(preferences.volume, forKey: Keys.volume)
+        defaults.set(preferences.isMuted, forKey: Keys.isMuted)
         defaults.set(preferences.speed, forKey: Keys.speed)
         defaults.set(preferences.resumePlayback, forKey: Keys.resumePlayback)
         defaults.set(preferences.autoLoadSubtitles, forKey: Keys.autoLoadSubtitles)
@@ -308,6 +439,30 @@ public final class PreferencesStore {
         defaults.set(preferences.wifiSharingEnabled, forKey: Keys.wifiSharingEnabled)
         defaults.set(preferences.wifiSharingPasscode, forKey: Keys.wifiSharingPasscode)
         defaults.set(preferences.wifiSharingPreferIPv6, forKey: Keys.wifiSharingPreferIPv6)
+        defaults.set(preferences.preferredAudioLanguage, forKey: Keys.preferredAudioLanguage)
+        defaults.set(preferences.replayGain.rawValue, forKey: Keys.replayGain)
+        defaults.set(preferences.audioOutputModule.rawValue, forKey: Keys.audioOutputModule)
+        defaults.set(preferences.audioOutputDeviceID, forKey: Keys.audioOutputDeviceID)
+        defaults.set(preferences.audioVisualizationEnabled, forKey: Keys.audioVisualizationEnabled)
+        defaults.set(preferences.audioEqualizerEnabled, forKey: Keys.audioEqualizerEnabled)
+        defaults.set(preferences.audioEqualizerPresetID, forKey: Keys.audioEqualizerPresetID)
+        defaults.set(preferences.audioEqualizerBands, forKey: Keys.audioEqualizerBands)
+        defaults.set(preferences.audioEqualizerPreamp, forKey: Keys.audioEqualizerPreamp)
+        defaults.set(preferences.audioNormalizeEnabled, forKey: Keys.audioNormalizeEnabled)
+        defaults.set(preferences.audioCompressorEnabled, forKey: Keys.audioCompressorEnabled)
+        defaults.set(preferences.audioCompressorThreshold, forKey: Keys.audioCompressorThreshold)
+        defaults.set(preferences.audioCompressorRatio, forKey: Keys.audioCompressorRatio)
+        defaults.set(preferences.audioCompressorAttack, forKey: Keys.audioCompressorAttack)
+        defaults.set(preferences.audioCompressorRelease, forKey: Keys.audioCompressorRelease)
+        defaults.set(preferences.audioCompressorMakeup, forKey: Keys.audioCompressorMakeup)
+        defaults.set(preferences.audioChannelMode.rawValue, forKey: Keys.audioChannelMode)
+        defaults.set(preferences.audioStereoWidenerEnabled, forKey: Keys.audioStereoWidenerEnabled)
+        defaults.set(preferences.audioStereoWidenerAmount, forKey: Keys.audioStereoWidenerAmount)
+        defaults.set(preferences.audioHeadphoneVirtualizer, forKey: Keys.audioHeadphoneVirtualizer)
+        defaults.set(preferences.audioForceMono, forKey: Keys.audioForceMono)
+        defaults.set(preferences.audioPitchScale, forKey: Keys.audioPitchScale)
+        defaults.set(preferences.audioSpatializerEnabled, forKey: Keys.audioSpatializerEnabled)
+        defaults.set(preferences.audioSpatializerAmount, forKey: Keys.audioSpatializerAmount)
     }
 
     public func mpvOptions() -> [String: String] {
@@ -317,7 +472,10 @@ public final class PreferencesStore {
 
         var options: [String: String] = [
             "volume": "\(Int(p.volume))",
+            "volume-max": "\(Int(KinemaPreferences.volumeMax))",
+            "mute": p.isMuted ? "yes" : "no",
             "speed": "\(p.speed)",
+            "replaygain": p.replayGain.mpvValue,
             "sub-font-size": "\(p.subtitleFontSize)",
             "sub-color": normalizedSubtitleColorHex(p.subtitleColorHex),
             "sub-border-size": "\(p.subtitleBorderSize)",
@@ -336,6 +494,21 @@ public final class PreferencesStore {
             "keep-open": "yes",
             "hr-seek": "yes"
         ]
+
+        let alang = p.preferredAudioLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !alang.isEmpty {
+            options["alang"] = alang
+        }
+        if let ao = p.audioOutputModule.mpvAO {
+            options["ao"] = ao
+        }
+        let device = p.audioOutputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !device.isEmpty {
+            options["audio-device"] = device
+        }
+        if let af = AudioFilterGraph.build(from: p) {
+            options["af"] = af
+        }
 
         // Do NOT set secondary-sub-align-x / secondary-sub-ass-override here —
         // older bundled libmpv rejects them and used to break startup.

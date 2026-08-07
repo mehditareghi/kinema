@@ -25,7 +25,8 @@ public enum KeyBindingDefaults {
         KeyBinding(action: "fullscreen", keys: ["f"], description: "Toggle fullscreen"),
         KeyBinding(action: "speed-up", keys: ["]"], description: "Increase speed"),
         KeyBinding(action: "speed-down", keys: ["["], description: "Decrease speed"),
-        KeyBinding(action: "subtitle-cycle", keys: ["v"], description: "Cycle subtitles")
+        KeyBinding(action: "subtitle-cycle", keys: ["v"], description: "Cycle subtitles"),
+        KeyBinding(action: "audio-cycle", keys: ["a"], description: "Cycle audio tracks")
     ]
 
     public static func load() -> [KeyBinding] {

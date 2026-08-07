@@ -55,6 +55,11 @@
     "description": "Cycle subtitles"
   },
   {
+    "action": "audio-cycle",
+    "keys": ["a"],
+    "description": "Cycle audio tracks"
+  },
+  {
     "action": "subtitle-delay-down",
     "keys": ["g"],
     "description": "Subtitle delay −0.1s"

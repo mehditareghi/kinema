@@ -97,7 +97,17 @@ public struct PlayerControlsOverlay: View {
                 Text(formatTime(displayedPosition))
                     .frame(minWidth: 48, alignment: .leading)
                 Spacer()
-                if let chapter = viewModel.session.currentChapter {
+                if viewModel.session.isABLooping {
+                    Text(KinemaCopy.abLoop)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(accent.opacity(0.95))
+                } else if viewModel.session.hasABLoopA {
+                    Text("Loop A set")
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(accent.opacity(0.85))
+                } else if let chapter = viewModel.session.currentChapter {
                     Text(chapter.displayTitle)
                         .font(.caption2.weight(.semibold))
                         .lineLimit(1)
@@ -114,6 +124,8 @@ public struct PlayerControlsOverlay: View {
                 position: $scrubPosition,
                 duration: duration,
                 chapters: viewModel.session.chapters,
+                abLoopA: viewModel.session.abLoopA,
+                abLoopB: viewModel.session.abLoopB,
                 accent: accent,
                 rowHeight: progressHeight,
                 isScrubbing: $isScrubbing,
@@ -147,6 +159,17 @@ public struct PlayerControlsOverlay: View {
                             viewModel.showChapters = true
                         }
                     }
+
+                    iconButton("repeat", label: KinemaCopy.abLoop) {
+                        let message = viewModel.session.cycleABLoop()
+                        viewModel.showOSD(message)
+                        viewModel.scheduleHideControls()
+                    }
+                    .foregroundStyle(
+                        viewModel.session.isABLooping || viewModel.session.hasABLoopA
+                            ? accent
+                            : Color.white
+                    )
 
                     Spacer(minLength: 8)
 
@@ -289,6 +312,8 @@ private struct PlayerProgressSlider: View {
     @Binding var position: Double
     let duration: Double
     let chapters: [Chapter]
+    let abLoopA: TimeInterval?
+    let abLoopB: TimeInterval?
     let accent: Color
     let rowHeight: CGFloat
     @Binding var isScrubbing: Bool
@@ -306,6 +331,11 @@ private struct PlayerProgressSlider: View {
         ZStack {
             ChapterMarkerTrack(chapters: chapters, duration: duration, accent: accent)
                 .frame(height: 4)
+                .padding(.horizontal, 2)
+                .allowsHitTesting(false)
+
+            ABLoopMarkerTrack(pointA: abLoopA, pointB: abLoopB, duration: duration, accent: accent)
+                .frame(height: rowHeight)
                 .padding(.horizontal, 2)
                 .allowsHitTesting(false)
 
@@ -377,5 +407,62 @@ struct ChapterMarkerTrack: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// A–B loop range + labeled ticks on the scrubber.
+struct ABLoopMarkerTrack: View {
+    let pointA: TimeInterval?
+    let pointB: TimeInterval?
+    let duration: Double
+    let accent: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            let safeDuration = max(duration, 0.001)
+            let midY = geo.size.height / 2
+
+            ZStack(alignment: .leading) {
+                if let pointA, let pointB {
+                    let start = min(pointA, pointB)
+                    let end = max(pointA, pointB)
+                    let x0 = width * min(1, max(0, start / safeDuration))
+                    let x1 = width * min(1, max(0, end / safeDuration))
+                    Capsule()
+                        .fill(accent.opacity(0.28))
+                        .frame(width: max(2, x1 - x0), height: 6)
+                        .position(x: (x0 + x1) / 2, y: midY)
+                }
+
+                if let pointA {
+                    loopTick(label: "A", time: pointA, width: width, safeDuration: safeDuration, midY: midY)
+                }
+                if let pointB {
+                    loopTick(label: "B", time: pointB, width: width, safeDuration: safeDuration, midY: midY)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func loopTick(
+        label: String,
+        time: TimeInterval,
+        width: CGFloat,
+        safeDuration: Double,
+        midY: CGFloat
+    ) -> some View {
+        let x = width * min(1, max(0, time / safeDuration))
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .foregroundStyle(accent)
+            Capsule()
+                .fill(accent)
+                .frame(width: 2.5, height: 12)
+        }
+        .position(x: x, y: midY - 2)
     }
 }

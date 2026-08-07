@@ -14,6 +14,10 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var playlist: [MediaItem] = []
     public private(set) var tracks: [Track] = []
     public private(set) var chapters: [Chapter] = []
+    /// A–B loop start; `nil` means unset (`ab-loop-a=no`).
+    public private(set) var abLoopA: TimeInterval?
+    /// A–B loop end; `nil` means unset (`ab-loop-b=no`).
+    public private(set) var abLoopB: TimeInterval?
     public private(set) var activeSubtitleTrackID: Int?
     public private(set) var activeSecondarySubtitleTrackID: Int?
 
@@ -147,6 +151,7 @@ public final class PlayerSession: PlaybackEngine {
         currentItem = nil
         tracks = []
         chapters = []
+        clearABLoopState(applyToEngine: false)
         activeSubtitleTrackID = nil
         activeSecondarySubtitleTrackID = nil
         subtitleDelay = 0
@@ -238,6 +243,7 @@ public final class PlayerSession: PlaybackEngine {
         currentItem = resolvedItem
         tracks = []
         chapters = []
+        clearABLoopState(applyToEngine: isPrepared)
         activeSubtitleTrackID = nil
         activeSecondarySubtitleTrackID = nil
         externalSourceByTrackID = [:]
@@ -489,6 +495,71 @@ public final class PlayerSession: PlaybackEngine {
     public func playNextChapter() {
         guard let index = currentChapterIndex, index + 1 < chapters.count else { return }
         seekToChapter(chapters[index + 1])
+    }
+
+    public var hasABLoopA: Bool { abLoopA != nil }
+    public var hasABLoopB: Bool { abLoopB != nil }
+    public var isABLooping: Bool { abLoopA != nil && abLoopB != nil }
+
+    /// mpv-style cycle: set A → set B → clear.
+    @discardableResult
+    public func cycleABLoop() -> String {
+        if isABLooping {
+            clearABLoop()
+            return "A–B loop cleared"
+        }
+        if let start = abLoopA {
+            var end = info.position
+            var resolvedStart = start
+            if end < resolvedStart {
+                swap(&resolvedStart, &end)
+            }
+            // Avoid a zero-length loop from a double-tap.
+            if abs(end - resolvedStart) < 0.15 {
+                end = resolvedStart + 0.15
+            }
+            abLoopA = resolvedStart
+            abLoopB = end
+            controller.setABLoopA(resolvedStart)
+            controller.setABLoopB(end)
+            seek(to: resolvedStart)
+            return "A–B loop \(formatABLoopOSD(start: resolvedStart, end: end))"
+        }
+
+        let point = info.position
+        abLoopA = point
+        abLoopB = nil
+        controller.setABLoopA(point)
+        controller.setABLoopB(nil)
+        return "Loop A · \(formatTimeCode(point))"
+    }
+
+    public func clearABLoop() {
+        clearABLoopState(applyToEngine: true)
+    }
+
+    private func clearABLoopState(applyToEngine: Bool) {
+        abLoopA = nil
+        abLoopB = nil
+        if applyToEngine {
+            controller.clearABLoop()
+        }
+    }
+
+    private func formatABLoopOSD(start: TimeInterval, end: TimeInterval) -> String {
+        "\(formatTimeCode(start)) → \(formatTimeCode(end))"
+    }
+
+    private func formatTimeCode(_ interval: TimeInterval) -> String {
+        guard interval.isFinite, interval >= 0 else { return "0:00" }
+        let total = Int(interval.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     public func stop() {

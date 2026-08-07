@@ -70,6 +70,11 @@
     "description": "Next chapter"
   },
   {
+    "action": "ab-loop",
+    "keys": ["b"],
+    "description": "A–B loop (set A / set B / clear)"
+  },
+  {
     "action": "subtitle-delay-down",
     "keys": ["g"],
     "description": "Subtitle delay −0.1s"

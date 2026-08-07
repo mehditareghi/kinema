@@ -113,6 +113,7 @@ public enum KinemaCopy {
     public static let audio = "Audio"
     public static let chapters = "Chapters"
     public static let chaptersNoneAvailable = "This title has no chapters."
+    public static let abLoop = "A–B Loop"
     public static let captions = "Subtitles"
     public static let captionsOff = "Off"
     public static let captionsEmbedded = "In this video"

@@ -196,6 +196,11 @@ public final class PlayerViewModel {
             showOSD(session.currentChapter?.displayTitle ?? binding.description)
             scheduleHideControls()
             return
+        case "ab-loop":
+            let message = session.cycleABLoop()
+            showOSD(message)
+            scheduleHideControls()
+            return
         case "subtitle-delay-down": session.adjustSubtitleDelay(by: -0.1)
         case "subtitle-delay-up": session.adjustSubtitleDelay(by: 0.1)
         case "subtitle-bookmark-audio": session.markBookmarkAudio()

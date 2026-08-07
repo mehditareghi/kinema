@@ -12,6 +12,8 @@ public enum MPVProperty: String, Sendable {
     case trackList = "track-list"
     case chapterList = "chapter-list"
     case chapter = "chapter"
+    case abLoopA = "ab-loop-a"
+    case abLoopB = "ab-loop-b"
     case sid = "sid"
     case secondarySid = "secondary-sid"
     case subDelay = "sub-delay"

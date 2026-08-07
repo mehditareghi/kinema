@@ -193,6 +193,8 @@ public final class MPVController: @unchecked Sendable {
             MPVProperty.mediaTitle.rawValue,
             MPVProperty.trackList.rawValue,
             MPVProperty.chapterList.rawValue,
+            MPVProperty.abLoopA.rawValue,
+            MPVProperty.abLoopB.rawValue,
             MPVProperty.sid.rawValue,
             MPVProperty.secondarySid.rawValue,
             MPVProperty.subDelay.rawValue,
@@ -574,6 +576,47 @@ public final class MPVController: @unchecked Sendable {
             guard isInitialized, !isShuttingDown, let handle else { return [] }
             return MPVChapterList.parseChapters(from: handle)
         }
+    }
+
+    public func setABLoopA(_ time: TimeInterval?) {
+        setABLoopPoint(MPVProperty.abLoopA.rawValue, time: time)
+    }
+
+    public func setABLoopB(_ time: TimeInterval?) {
+        setABLoopPoint(MPVProperty.abLoopB.rawValue, time: time)
+    }
+
+    public func clearABLoop() {
+        setABLoopA(nil)
+        setABLoopB(nil)
+    }
+
+    public func abLoopSnapshot() -> (a: TimeInterval?, b: TimeInterval?) {
+        guard isInitialized, !isShuttingDown else { return (nil, nil) }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, handle != nil else { return (nil, nil) }
+            return (readABLoopPoint(MPVProperty.abLoopA.rawValue), readABLoopPoint(MPVProperty.abLoopB.rawValue))
+        }
+    }
+
+    private func setABLoopPoint(_ name: String, time: TimeInterval?) {
+        if let time {
+            setProperty(name, double: time)
+        } else {
+            setStringOption(name, "no")
+        }
+    }
+
+    private func readABLoopPoint(_ name: String) -> TimeInterval? {
+        if let string = getString(name) {
+            let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if normalized.isEmpty || normalized == "no" { return nil }
+            if let value = Double(normalized), value.isFinite { return value }
+        }
+        if let value = getDouble(name), value.isFinite {
+            return value
+        }
+        return nil
     }
 
     public func playbackInfo() -> PlaybackInfo {

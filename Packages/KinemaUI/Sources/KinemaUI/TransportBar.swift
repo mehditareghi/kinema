@@ -48,6 +48,16 @@ public struct TransportBar: View {
                 .padding(.horizontal, 2)
                 .allowsHitTesting(false)
 
+                ABLoopMarkerTrack(
+                    pointA: viewModel.session.abLoopA,
+                    pointB: viewModel.session.abLoopB,
+                    duration: max(viewModel.session.info.duration, 1),
+                    accent: accent
+                )
+                .frame(height: 28)
+                .padding(.horizontal, 2)
+                .allowsHitTesting(false)
+
                 Slider(
                     value: $scrubPosition,
                     in: 0...max(viewModel.session.info.duration, 1)
@@ -67,7 +77,11 @@ public struct TransportBar: View {
                 Text(formatTime(viewModel.session.info.position))
                     .font(.caption2.monospacedDigit())
                 Spacer()
-                if let chapter = viewModel.session.currentChapter {
+                if viewModel.session.isABLooping {
+                    Text(KinemaCopy.abLoop)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(accent)
+                } else if let chapter = viewModel.session.currentChapter {
                     Text(chapter.displayTitle)
                         .font(.caption2.weight(.medium))
                         .lineLimit(1)
@@ -142,6 +156,17 @@ struct PlayerToolsMenu: View {
                 Button { viewModel.showChapters = true } label: {
                     Label(KinemaCopy.chapters, systemImage: "list.bullet.rectangle")
                 }
+            }
+            Button {
+                let message = viewModel.session.cycleABLoop()
+                viewModel.showOSD(message)
+            } label: {
+                Label(
+                    viewModel.session.isABLooping
+                        ? "Clear A–B Loop"
+                        : (viewModel.session.hasABLoopA ? "Set Loop B" : "Set Loop A"),
+                    systemImage: "repeat"
+                )
             }
             Button { viewModel.showSubtitles = true } label: {
                 Label(KinemaCopy.captions, systemImage: "captions.bubble")

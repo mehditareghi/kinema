@@ -26,7 +26,9 @@ public enum KeyBindingDefaults {
         KeyBinding(action: "speed-up", keys: ["]"], description: "Increase speed"),
         KeyBinding(action: "speed-down", keys: ["["], description: "Decrease speed"),
         KeyBinding(action: "subtitle-cycle", keys: ["v"], description: "Cycle subtitles"),
-        KeyBinding(action: "audio-cycle", keys: ["a"], description: "Cycle audio tracks")
+        KeyBinding(action: "audio-cycle", keys: ["a"], description: "Cycle audio tracks"),
+        KeyBinding(action: "chapter-prev", keys: [","], description: "Previous chapter"),
+        KeyBinding(action: "chapter-next", keys: ["."], description: "Next chapter")
     ]
 
     public static func load() -> [KeyBinding] {

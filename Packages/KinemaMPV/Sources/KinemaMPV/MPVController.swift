@@ -568,6 +568,14 @@ public final class MPVController: @unchecked Sendable {
         }
     }
 
+    public func chapterSnapshot() -> [Chapter] {
+        guard isInitialized, !isShuttingDown else { return [] }
+        return commandQueue.sync {
+            guard isInitialized, !isShuttingDown, let handle else { return [] }
+            return MPVChapterList.parseChapters(from: handle)
+        }
+    }
+
     public func playbackInfo() -> PlaybackInfo {
         guard isInitialized, !isShuttingDown else {
             return PlaybackInfo()

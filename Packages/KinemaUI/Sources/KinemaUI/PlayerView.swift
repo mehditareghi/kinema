@@ -96,6 +96,9 @@ public struct PlayerView: View {
         .sheet(isPresented: $viewModel.showAudio) {
             AudioSheet(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showChapters) {
+            ChaptersSheet(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showSettings) {
             SettingsView()
         }
@@ -107,6 +110,13 @@ public struct PlayerView: View {
             }
         }
         .onChange(of: viewModel.showAudio) { _, isShowing in
+            if isShowing {
+                viewModel.cancelAutoHideControls()
+            } else if viewModel.showControls {
+                viewModel.scheduleHideControls()
+            }
+        }
+        .onChange(of: viewModel.showChapters) { _, isShowing in
             if isShowing {
                 viewModel.cancelAutoHideControls()
             } else if viewModel.showControls {
@@ -206,6 +216,9 @@ public struct MusicModeView: View {
         }
         .sheet(isPresented: $viewModel.showPlaylist) {
             PlaylistSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showChapters) {
+            ChaptersSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $viewModel.showSettings) {
             SettingsView()

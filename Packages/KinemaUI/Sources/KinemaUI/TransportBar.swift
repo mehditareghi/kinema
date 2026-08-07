@@ -2,6 +2,7 @@ import SwiftUI
 import KinemaCore
 import KinemaPlayback
 
+#if os(macOS)
 public struct TransportBar: View {
     @Bindable var viewModel: PlayerViewModel
     let accent: Color
@@ -37,26 +38,44 @@ public struct TransportBar: View {
 
     private var progressRow: some View {
         VStack(spacing: 6) {
-            Slider(
-                value: $scrubPosition,
-                in: 0...max(viewModel.session.info.duration, 1)
-            ) { editing in
-                isScrubbing = editing
-                if editing {
-                    viewModel.cancelAutoHideControls()
-                } else {
-                    viewModel.session.seek(to: scrubPosition)
-                    viewModel.scheduleHideControls()
+            ZStack {
+                ChapterMarkerTrack(
+                    chapters: viewModel.session.chapters,
+                    duration: max(viewModel.session.info.duration, 1),
+                    accent: accent
+                )
+                .frame(height: 4)
+                .padding(.horizontal, 2)
+                .allowsHitTesting(false)
+
+                Slider(
+                    value: $scrubPosition,
+                    in: 0...max(viewModel.session.info.duration, 1)
+                ) { editing in
+                    isScrubbing = editing
+                    if editing {
+                        viewModel.cancelAutoHideControls()
+                    } else {
+                        viewModel.session.seek(to: scrubPosition)
+                        viewModel.scheduleHideControls()
+                    }
                 }
+                .tint(accent)
             }
-            .tint(accent)
 
             HStack {
                 Text(formatTime(viewModel.session.info.position))
+                    .font(.caption2.monospacedDigit())
+                Spacer()
+                if let chapter = viewModel.session.currentChapter {
+                    Text(chapter.displayTitle)
+                        .font(.caption2.weight(.medium))
+                        .lineLimit(1)
+                }
                 Spacer()
                 Text(formatTime(viewModel.session.info.duration))
+                    .font(.caption2.monospacedDigit())
             }
-            .font(.caption2.monospacedDigit())
             .foregroundStyle(.secondary)
         }
     }
@@ -119,6 +138,11 @@ struct PlayerToolsMenu: View {
             Button { viewModel.showPlaylist = true } label: {
                 Label(KinemaCopy.lineup, systemImage: "list.bullet")
             }
+            if viewModel.session.hasChapters {
+                Button { viewModel.showChapters = true } label: {
+                    Label(KinemaCopy.chapters, systemImage: "list.bullet.rectangle")
+                }
+            }
             Button { viewModel.showSubtitles = true } label: {
                 Label(KinemaCopy.captions, systemImage: "captions.bubble")
             }
@@ -133,11 +157,9 @@ struct PlayerToolsMenu: View {
             } label: {
                 Label(viewModel.isMuted ? "Unmute" : "Mute", systemImage: viewModel.isMuted ? "speaker.slash" : "speaker.wave.2")
             }
-            #if os(macOS)
             Button { viewModel.toggleFullscreen() } label: {
                 Label("Fullscreen", systemImage: "arrow.up.left.and.arrow.down.right")
             }
-            #endif
         } label: {
             Image(systemName: "ellipsis")
                 .font(.body.weight(.semibold))
@@ -148,6 +170,7 @@ struct PlayerToolsMenu: View {
         .fixedSize()
     }
 }
+#endif
 
 public struct OSDOverlay: View {
     let message: String?

@@ -60,6 +60,16 @@
     "description": "Cycle audio tracks"
   },
   {
+    "action": "chapter-prev",
+    "keys": [","],
+    "description": "Previous chapter"
+  },
+  {
+    "action": "chapter-next",
+    "keys": ["."],
+    "description": "Next chapter"
+  },
+  {
     "action": "subtitle-delay-down",
     "keys": ["g"],
     "description": "Subtitle delay −0.1s"

@@ -22,6 +22,7 @@ public final class PlayerViewModel {
     public var showPlaylist = false
     public var showSubtitles = false
     public var showAudio = false
+    public var showChapters = false
     public var showSettings = false
     public var librarySection: LibrarySection = .collection
     public let libraryBrowse = LibraryBrowseState()
@@ -60,6 +61,10 @@ public final class PlayerViewModel {
         hideControlsTask?.cancel()
         openTask?.cancel()
         showSettings = false
+        showAudio = false
+        showChapters = false
+        showSubtitles = false
+        showPlaylist = false
         ScreenWakeLock.setPreventSleep(false)
         session.teardownPlayback()
         withAnimation(.easeInOut(duration: 0.28)) {
@@ -136,12 +141,12 @@ public final class PlayerViewModel {
     }
 
     public func scheduleHideControls(after seconds: TimeInterval = 4) {
-        guard isInPlayer, !showSettings, !showAudio else { return }
+        guard isInPlayer, !showSettings, !showAudio, !showChapters, !showSubtitles, !showPlaylist else { return }
         hideControlsTask?.cancel()
         hideControlsTask = Task {
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            guard !showSettings, !showAudio else { return }
+            guard !showSettings, !showAudio, !showChapters, !showSubtitles, !showPlaylist else { return }
             withAnimation(.easeOut(duration: 0.25)) {
                 showControls = false
             }
@@ -179,6 +184,18 @@ public final class PlayerViewModel {
         case "speed-down": session.setSpeed(max(0.25, session.info.speed - 0.25))
         case "subtitle-cycle": session.cycleSubtitle()
         case "audio-cycle": session.cycleAudio()
+        case "chapter-prev":
+            guard session.hasChapters else { return }
+            session.playPreviousChapter()
+            showOSD(session.currentChapter?.displayTitle ?? binding.description)
+            scheduleHideControls()
+            return
+        case "chapter-next":
+            guard session.hasChapters else { return }
+            session.playNextChapter()
+            showOSD(session.currentChapter?.displayTitle ?? binding.description)
+            scheduleHideControls()
+            return
         case "subtitle-delay-down": session.adjustSubtitleDelay(by: -0.1)
         case "subtitle-delay-up": session.adjustSubtitleDelay(by: 0.1)
         case "subtitle-bookmark-audio": session.markBookmarkAudio()

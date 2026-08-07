@@ -244,6 +244,15 @@ public struct Chapter: Identifiable, Hashable, Sendable {
         self.title = title
         self.time = time
     }
+
+    /// Human-facing label; falls back to a numbered chapter when the file has no title.
+    public var displayTitle: String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "Chapter \(id + 1)"
+        }
+        return trimmed
+    }
 }
 
 public struct PlaybackInfo: Sendable, Equatable {

@@ -100,6 +100,7 @@ public final class PlayerSession: PlaybackEngine {
     private var positionUpdateTask: Task<Void, Never>?
     private var lastInfoRefresh = Date.distantPast
     private var lastTrackRefresh = Date.distantPast
+    private var lastChapterRefresh = Date.distantPast
     private var lastProgressSave = Date.distantPast
     private var securityScopedURLs: [URL] = []
     #if os(iOS) || os(tvOS)
@@ -435,6 +436,59 @@ public final class PlayerSession: PlaybackEngine {
     public func seekRelative(_ delta: TimeInterval) {
         controller.seek(to: delta, relative: true)
         refreshInfo(force: true)
+    }
+
+    /// Index of the chapter that contains the current playhead, if any.
+    public var currentChapterIndex: Int? {
+        guard !chapters.isEmpty else { return nil }
+        let position = info.position
+        var result = 0
+        for (index, chapter) in chapters.enumerated() {
+            if chapter.time <= position + 0.05 {
+                result = index
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    public var currentChapter: Chapter? {
+        guard let currentChapterIndex else { return nil }
+        return chapters[currentChapterIndex]
+    }
+
+    public var hasChapters: Bool { !chapters.isEmpty }
+
+    public func seekToChapter(_ chapter: Chapter) {
+        seek(to: max(0, chapter.time))
+    }
+
+    public func seekToChapter(at index: Int) {
+        guard chapters.indices.contains(index) else { return }
+        seekToChapter(chapters[index])
+    }
+
+    /// Previous chapter, or restart the current chapter if more than ~2s into it.
+    public func playPreviousChapter() {
+        guard !chapters.isEmpty else { return }
+        guard let index = currentChapterIndex else {
+            seekToChapter(chapters[0])
+            return
+        }
+        let chapter = chapters[index]
+        if info.position - chapter.time > 2 {
+            seekToChapter(chapter)
+        } else if index > 0 {
+            seekToChapter(chapters[index - 1])
+        } else {
+            seek(to: 0)
+        }
+    }
+
+    public func playNextChapter() {
+        guard let index = currentChapterIndex, index + 1 < chapters.count else { return }
+        seekToChapter(chapters[index + 1])
     }
 
     public func stop() {
@@ -1240,6 +1294,7 @@ public final class PlayerSession: PlaybackEngine {
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(350))
                     refreshTracks(force: true)
+                    refreshChapters(force: true)
                     applyLiveSubtitlePreferences()
                     applyAudioPipeline()
                     applyPreferredAudioLanguage()
@@ -1254,6 +1309,7 @@ public final class PlayerSession: PlaybackEngine {
         case .propertyChanged:
             refreshInfo()
             refreshTracks()
+            refreshChapters()
             // With keep-open=yes, EOF often does not unload the file, so END_FILE may
             // never arrive — advance the playlist from eof-reached instead.
             if controller.hasReachedEOF {
@@ -1363,6 +1419,18 @@ public final class PlayerSession: PlaybackEngine {
 
         syncTimingFromEngine()
         EventBus.shared.emit(.tracksUpdated(tracks))
+    }
+
+    private func refreshChapters(force: Bool = false) {
+        guard state.isActive || state == .loaded else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastChapterRefresh) >= 0.5 else { return }
+        lastChapterRefresh = now
+
+        let parsed = controller.chapterSnapshot()
+        guard parsed != chapters else { return }
+        chapters = parsed
+        EventBus.shared.emit(.chaptersUpdated(chapters))
     }
 
     private func syncTimingFromEngine() {

@@ -163,4 +163,13 @@ enum MPVNodeValue {
         if case .int(let value) = self { return value }
         return nil
     }
+
+    var doubleValue: Double? {
+        switch self {
+        case .double(let value): return value
+        case .int(let value): return Double(value)
+        case .string(let value): return Double(value)
+        case .flag: return nil
+        }
+    }
 }

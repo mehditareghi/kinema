@@ -81,10 +81,14 @@ public struct PlayerControlsOverlay: View {
     // MARK: - Bottom
 
     private var speedStyle: PlaybackSpeedControl.Style {
+        #if os(tvOS)
+        return .menu
+        #else
         // Prefer menu until we have a real measurement — never stick on the wide
         // slider because chromeWidth was still 0.
         guard chromeWidth > 1 else { return .menu }
         return chromeWidth >= PlaybackSpeedControl.inlineMinChromeWidth ? .inlineSteps : .menu
+        #endif
     }
 
     private var bottomChrome: some View {
@@ -92,6 +96,13 @@ public struct PlayerControlsOverlay: View {
             HStack {
                 Text(formatTime(displayedPosition))
                     .frame(minWidth: 48, alignment: .leading)
+                Spacer()
+                if let chapter = viewModel.session.currentChapter {
+                    Text(chapter.displayTitle)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
                 Spacer()
                 Text(formatTime(viewModel.session.info.duration))
                     .frame(minWidth: 48, alignment: .trailing)
@@ -102,6 +113,7 @@ public struct PlayerControlsOverlay: View {
             PlayerProgressSlider(
                 position: $scrubPosition,
                 duration: duration,
+                chapters: viewModel.session.chapters,
                 accent: accent,
                 rowHeight: progressHeight,
                 isScrubbing: $isScrubbing,
@@ -127,6 +139,13 @@ public struct PlayerControlsOverlay: View {
                     ) {
                         viewModel.cancelAutoHideControls()
                         viewModel.showSubtitles = true
+                    }
+
+                    if viewModel.session.hasChapters {
+                        iconButton("list.bullet.rectangle", label: KinemaCopy.chapters) {
+                            viewModel.cancelAutoHideControls()
+                            viewModel.showChapters = true
+                        }
                     }
 
                     Spacer(minLength: 8)
@@ -161,7 +180,19 @@ public struct PlayerControlsOverlay: View {
     }
 
     private var transportControls: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: viewModel.session.hasChapters ? 18 : 28) {
+            if viewModel.session.hasChapters {
+                glassCircleButton(size: 36) {
+                    viewModel.session.playPreviousChapter()
+                    viewModel.showOSD(viewModel.session.currentChapter?.displayTitle ?? KinemaCopy.chapters)
+                    viewModel.scheduleHideControls()
+                } label: {
+                    Image(systemName: "backward.end.alt.fill")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .accessibilityLabel("Previous chapter")
+            }
+
             glassCircleButton(size: 40) {
                 viewModel.session.seekRelative(-10)
                 viewModel.showOSD("-10s")
@@ -191,6 +222,18 @@ public struct PlayerControlsOverlay: View {
                     .font(.system(size: 17, weight: .medium))
             }
             .accessibilityLabel("Forward 10 seconds")
+
+            if viewModel.session.hasChapters {
+                glassCircleButton(size: 36) {
+                    viewModel.session.playNextChapter()
+                    viewModel.showOSD(viewModel.session.currentChapter?.displayTitle ?? KinemaCopy.chapters)
+                    viewModel.scheduleHideControls()
+                } label: {
+                    Image(systemName: "forward.end.alt.fill")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .accessibilityLabel("Next chapter")
+            }
         }
     }
 
@@ -245,6 +288,7 @@ public struct PlayerControlsOverlay: View {
 private struct PlayerProgressSlider: View {
     @Binding var position: Double
     let duration: Double
+    let chapters: [Chapter]
     let accent: Color
     let rowHeight: CGFloat
     @Binding var isScrubbing: Bool
@@ -259,20 +303,33 @@ private struct PlayerProgressSlider: View {
     }
 
     var body: some View {
-        Slider(
-            value: $localPosition,
-            in: 0...max(duration, 0.001),
-            onEditingChanged: { editing in
-                if editing {
-                    isScrubbing = true
-                    onScrubStart()
-                } else {
-                    position = localPosition
-                    onScrubEnd(localPosition)
+        ZStack {
+            ChapterMarkerTrack(chapters: chapters, duration: duration, accent: accent)
+                .frame(height: 4)
+                .padding(.horizontal, 2)
+                .allowsHitTesting(false)
+
+            #if os(tvOS)
+            ProgressView(value: min(max(localPosition, 0), max(duration, 0.001)), total: max(duration, 0.001))
+                .tint(accent)
+                .progressViewStyle(.linear)
+            #else
+            Slider(
+                value: $localPosition,
+                in: 0...max(duration, 0.001),
+                onEditingChanged: { editing in
+                    if editing {
+                        isScrubbing = true
+                        onScrubStart()
+                    } else {
+                        position = localPosition
+                        onScrubEnd(localPosition)
+                    }
                 }
-            }
-        )
-        .tint(accent)
+            )
+            .tint(accent)
+            #endif
+        }
         .frame(height: rowHeight)
         .onAppear {
             localPosition = position
@@ -293,5 +350,32 @@ private struct PlayerProgressSlider: View {
             }
         }
     }
+}
 
+/// Subtle chapter ticks under the scrubber — shared by player chrome and Music Mode.
+struct ChapterMarkerTrack: View {
+    let chapters: [Chapter]
+    let duration: Double
+    let accent: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let safeDuration = max(duration, 0.001)
+            ZStack(alignment: .leading) {
+                ForEach(chapters) { chapter in
+                    // Skip the very start mark — it coincides with the track origin.
+                    if chapter.time > 0.5, chapter.time < safeDuration {
+                        let x = width * min(1, max(0, chapter.time / safeDuration))
+                        Capsule()
+                            .fill(Color.white.opacity(0.55))
+                            .frame(width: 2, height: 8)
+                            .shadow(color: accent.opacity(0.35), radius: 1, y: 0)
+                            .position(x: x, y: geo.size.height / 2)
+                    }
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
 }

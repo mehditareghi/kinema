@@ -129,11 +129,21 @@ public enum MediaArtworkService {
     }
 
     private static func resolvedSeekTime(requested: TimeInterval, duration: TimeInterval?) -> TimeInterval {
-        if requested > 0 { return requested }
+        if requested > 0 {
+            return clampedSeekTime(requested, duration: duration)
+        }
         if let duration, duration > 0 {
-            return max(1, duration * snapshotPosition)
+            // Short clips (e.g. 1s HDR samples): never seek to EOF — that can hang extractors.
+            let fraction = duration < 3 ? 0.35 : snapshotPosition
+            return clampedSeekTime(duration * fraction, duration: duration)
         }
         return 10
+    }
+
+    private static func clampedSeekTime(_ time: TimeInterval, duration: TimeInterval?) -> TimeInterval {
+        guard let duration, duration > 0 else { return max(0, time) }
+        let upper = max(0, duration - 0.05)
+        return min(max(0, time), upper)
     }
 
     private struct FFmpegPreview {
@@ -282,7 +292,7 @@ public enum MediaArtworkService {
                     duration * 0.55
                 ])
             }
-            candidates = candidates.map { min($0, max(0, duration - 0.5)) }
+            candidates = candidates.map { clampedSeekTime($0, duration: duration) }
         }
 
         var seen = Set<Int>()

@@ -68,6 +68,35 @@ public struct SettingsView: View {
                     set: { PlayerSessionPool.sharedSession().setSpeed($0) }
                 ), range: 0.25...4, step: 0.25)
                 SettingsToggleRow(title: "Hardware decoding", subtitle: "Use VideoToolbox/mpv hardware paths when available.", isOn: binding(\.hardwareDecoding))
+                VStack(alignment: .leading, spacing: 6) {
+                    SettingsMenuRow(
+                        title: KinemaCopy.hdrToneMapping,
+                        value: preferences.preferences.hdrToneMappingMode.displayName
+                    ) {
+                        ForEach(HDRToneMappingMode.allCases) { mode in
+                            Button(mode.displayName) {
+                                preferences.preferences.hdrToneMappingMode = mode
+                                PlayerSessionPool.sharedSession().applyHDRToneMappingPreferences()
+                            }
+                        }
+                    }
+                    Text(KinemaCopy.hdrToneMappingSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                SettingsSliderRow(
+                    title: KinemaCopy.hdrTargetPeak,
+                    valueText: "\(Int(preferences.preferences.hdrTargetPeak.rounded())) nits",
+                    value: Binding(
+                        get: { preferences.preferences.hdrTargetPeak },
+                        set: { peak in
+                            preferences.preferences.hdrTargetPeak = KinemaPreferences.clampHDRTargetPeak(peak)
+                            PlayerSessionPool.sharedSession().applyHDRToneMappingPreferences()
+                        }
+                    ),
+                    range: KinemaPreferences.hdrTargetPeakRange,
+                    step: 50
+                )
             }
 
             AudioSettingsCard()

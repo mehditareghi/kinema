@@ -65,17 +65,41 @@ public struct PlayerControlsOverlay: View {
             }
             .accessibilityLabel("Close player")
 
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .foregroundStyle(.white.opacity(0.95))
-                .padding(.horizontal, 12)
-                .frame(height: 38)
-                .background(.black.opacity(0.28), in: Capsule())
-                .frame(maxWidth: 460, alignment: .leading)
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.white.opacity(0.95))
+
+                if viewModel.session.isHDRContent {
+                    hdrTitleTag
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(.black.opacity(0.28), in: Capsule())
+            .frame(maxWidth: 460, alignment: .leading)
 
             Spacer(minLength: 0)
         }
+    }
+
+    /// Compact HDR wordmark tag (no public SF Symbol for the HDR logo on all OS versions).
+    private var hdrTitleTag: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "sun.max.fill")
+                .font(.system(size: 8, weight: .bold))
+                .symbolRenderingMode(.hierarchical)
+            Text("HDR")
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .tracking(0.4)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(.white.opacity(0.18), in: Capsule())
+        .accessibilityLabel("HDR content")
+        .accessibilityAddTraits(.isStaticText)
     }
 
     // MARK: - Bottom

@@ -20,6 +20,8 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var abLoopA: TimeInterval?
     /// A–B loop end; `nil` means unset (`ab-loop-b=no`).
     public private(set) var abLoopB: TimeInterval?
+    /// True when the loaded video looks like HDR (PQ/HLG / BT.2020 peak).
+    public private(set) var isHDRContent = false
     public private(set) var activeSubtitleTrackID: Int?
     public private(set) var activeSecondarySubtitleTrackID: Int?
 
@@ -141,6 +143,7 @@ public final class PlayerSession: PlaybackEngine {
         controller.setSpeed(preferences.speed)
         controller.setMute(preferences.isMuted)
         applyAudioPipeline()
+        applyHDRToneMappingPreferences()
         isPrepared = true
         #endif
     }
@@ -158,6 +161,7 @@ public final class PlayerSession: PlaybackEngine {
         setUpNextOffer(nil)
         upNextSuppressedForMediaID = nil
         clearABLoopState(applyToEngine: false)
+        isHDRContent = false
         activeSubtitleTrackID = nil
         activeSecondarySubtitleTrackID = nil
         subtitleDelay = 0
@@ -187,6 +191,7 @@ public final class PlayerSession: PlaybackEngine {
         controller.setSpeed(options.speed)
         controller.setMute(options.isMuted)
         applyAudioPipeline()
+        applyHDRToneMappingPreferences()
         isPrepared = true
     }
 
@@ -607,6 +612,17 @@ public final class PlayerSession: PlaybackEngine {
         controller.setReplayGain(prefs.replayGain.mpvValue)
         let device = prefs.audioOutputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
         controller.setAudioDevice(device.isEmpty ? "auto" : device)
+    }
+
+    public func applyHDRToneMappingPreferences() {
+        guard isPrepared || controller.isReady else { return }
+        let prefs = PreferencesStore.shared.preferences
+        let peak = KinemaPreferences.clampHDRTargetPeak(prefs.hdrTargetPeak)
+        controller.applyHDRToneMapping(
+            mode: prefs.hdrToneMappingMode.mpvToneMapping,
+            computePeak: prefs.hdrToneMappingMode.mpvHDRComputePeak,
+            targetPeak: peak
+        )
     }
 
     public struct AudioOutputDevice: Identifiable, Hashable, Sendable {
@@ -1487,6 +1503,7 @@ public final class PlayerSession: PlaybackEngine {
                     applyLiveSubtitlePreferences()
                     applyAudioPipeline()
                     applyPreferredAudioLanguage()
+                    refreshHDRContentFlag()
                     await restoreSubtitleSession(for: item)
                 }
             }
@@ -1761,7 +1778,16 @@ public final class PlayerSession: PlaybackEngine {
         if state == .loaded || state == .playing || state == .paused {
             state = info.isPaused ? .paused : .playing
         }
+        if force {
+            refreshHDRContentFlag()
+        }
         EventBus.shared.emit(.playbackInfoUpdated(info))
+    }
+
+    private func refreshHDRContentFlag() {
+        let detected = controller.isHDRContent()
+        guard detected != isHDRContent else { return }
+        isHDRContent = detected
     }
 
     private func recordHistory() {

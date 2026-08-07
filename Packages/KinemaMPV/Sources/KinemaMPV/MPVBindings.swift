@@ -31,6 +31,9 @@ public enum MPVProperty: String, Sendable {
     case idleActive = "idle-active"
     case coreIdle = "core-idle"
     case videoParams = "video-params"
+    case videoParamsGamma = "video-params/gamma"
+    case videoParamsPrimaries = "video-params/primaries"
+    case videoParamsSigPeak = "video-params/sig-peak"
     case audioParams = "audio-params"
 }
 
@@ -54,6 +57,9 @@ public enum MPVCommand: String, Sendable {
 public enum MPVOption: String, Sendable {
     case vo = "vo"
     case hwdec = "hwdec"
+    case toneMapping = "tone-mapping"
+    case targetPeak = "target-peak"
+    case hdrComputePeak = "hdr-compute-peak"
     case keepOpen = "keep-open"
     case hrSeek = "hr-seek"
     case subAuto = "sub-auto"

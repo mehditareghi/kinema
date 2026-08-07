@@ -98,8 +98,46 @@ public enum SubtitlePreferenceCatalog {
     }
 }
 
+/// HDR → display tone-mapping preference (mpv `tone-mapping` / `hdr-compute-peak`).
+public enum HDRToneMappingMode: String, CaseIterable, Identifiable, Sendable, Codable {
+    case auto
+    case force
+    case off
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .force: return "Force"
+        case .off: return "Off"
+        }
+    }
+
+    public var mpvToneMapping: String {
+        switch self {
+        case .auto: return "auto"
+        case .force: return "hable"
+        case .off: return "clip"
+        }
+    }
+
+    public var mpvHDRComputePeak: String {
+        switch self {
+        case .auto, .force: return "yes"
+        case .off: return "no"
+        }
+    }
+}
+
 public struct KinemaPreferences: Sendable {
     public static let volumeMax: Double = 200
+    public static let hdrTargetPeakDefault: Double = 203
+    public static let hdrTargetPeakRange: ClosedRange<Double> = 100...1000
+
+    public static func clampHDRTargetPeak(_ value: Double) -> Double {
+        min(hdrTargetPeakRange.upperBound, max(hdrTargetPeakRange.lowerBound, value))
+    }
 
     public var volume: Double
     public var isMuted: Bool
@@ -114,6 +152,10 @@ public struct KinemaPreferences: Sendable {
     public var subtitleColorHex: String
     public var subtitleEncodingID: String
     public var hardwareDecoding: Bool
+    /// How aggressively to tone-map HDR for the current display.
+    public var hdrToneMappingMode: HDRToneMappingMode
+    /// Display peak luminance in nits (BT.2408 reference white ≈ 203).
+    public var hdrTargetPeak: Double
     public var musicModeEnabled: Bool
 
     public var subtitleBorderSize: Double
@@ -175,6 +217,8 @@ public struct KinemaPreferences: Sendable {
         subtitleColorHex: String = SubtitlePreferenceCatalog.defaultColorHex,
         subtitleEncodingID: String = SubtitlePreferenceCatalog.defaultEncodingID,
         hardwareDecoding: Bool = true,
+        hdrToneMappingMode: HDRToneMappingMode = .auto,
+        hdrTargetPeak: Double = Self.hdrTargetPeakDefault,
         musicModeEnabled: Bool = false,
         subtitleBorderSize: Double = 2,
         subtitleBorderColorHex: String = SubtitlePreferenceCatalog.defaultBorderColorHex,
@@ -232,6 +276,8 @@ public struct KinemaPreferences: Sendable {
         self.subtitleColorHex = subtitleColorHex
         self.subtitleEncodingID = subtitleEncodingID
         self.hardwareDecoding = hardwareDecoding
+        self.hdrToneMappingMode = hdrToneMappingMode
+        self.hdrTargetPeak = Self.clampHDRTargetPeak(hdrTargetPeak)
         self.musicModeEnabled = musicModeEnabled
         self.subtitleBorderSize = subtitleBorderSize
         self.subtitleBorderColorHex = subtitleBorderColorHex
@@ -298,6 +344,8 @@ public final class PreferencesStore {
         static let subtitleColorHex = "kinema.subtitleColorHex"
         static let subtitleEncodingID = "kinema.subtitleEncodingID"
         static let hardwareDecoding = "kinema.hardwareDecoding"
+        static let hdrToneMappingMode = "kinema.hdrToneMappingMode"
+        static let hdrTargetPeak = "kinema.hdrTargetPeak"
         static let musicModeEnabled = "kinema.musicModeEnabled"
         static let subtitleBorderSize = "kinema.subtitleBorderSize"
         static let subtitleBorderColorHex = "kinema.subtitleBorderColorHex"
@@ -365,6 +413,8 @@ public final class PreferencesStore {
             subtitleColorHex: defaults.string(forKey: Keys.subtitleColorHex) ?? SubtitlePreferenceCatalog.defaultColorHex,
             subtitleEncodingID: defaults.string(forKey: Keys.subtitleEncodingID) ?? SubtitlePreferenceCatalog.defaultEncodingID,
             hardwareDecoding: defaults.object(forKey: Keys.hardwareDecoding) as? Bool ?? true,
+            hdrToneMappingMode: HDRToneMappingMode(rawValue: defaults.string(forKey: Keys.hdrToneMappingMode) ?? "auto") ?? .auto,
+            hdrTargetPeak: defaults.object(forKey: Keys.hdrTargetPeak) as? Double ?? KinemaPreferences.hdrTargetPeakDefault,
             musicModeEnabled: defaults.object(forKey: Keys.musicModeEnabled) as? Bool ?? false,
             subtitleBorderSize: defaults.object(forKey: Keys.subtitleBorderSize) as? Double ?? 2,
             subtitleBorderColorHex: defaults.string(forKey: Keys.subtitleBorderColorHex) ?? SubtitlePreferenceCatalog.defaultBorderColorHex,
@@ -425,6 +475,8 @@ public final class PreferencesStore {
         defaults.set(preferences.subtitleColorHex, forKey: Keys.subtitleColorHex)
         defaults.set(preferences.subtitleEncodingID, forKey: Keys.subtitleEncodingID)
         defaults.set(preferences.hardwareDecoding, forKey: Keys.hardwareDecoding)
+        defaults.set(preferences.hdrToneMappingMode.rawValue, forKey: Keys.hdrToneMappingMode)
+        defaults.set(preferences.hdrTargetPeak, forKey: Keys.hdrTargetPeak)
         defaults.set(preferences.musicModeEnabled, forKey: Keys.musicModeEnabled)
         defaults.set(preferences.subtitleBorderSize, forKey: Keys.subtitleBorderSize)
         defaults.set(preferences.subtitleBorderColorHex, forKey: Keys.subtitleBorderColorHex)
@@ -537,6 +589,12 @@ public final class PreferencesStore {
         } else {
             options["hwdec"] = "no"
         }
+
+        let peak = KinemaPreferences.clampHDRTargetPeak(p.hdrTargetPeak)
+        options["tone-mapping"] = p.hdrToneMappingMode.mpvToneMapping
+        options["hdr-compute-peak"] = p.hdrToneMappingMode.mpvHDRComputePeak
+        options["target-peak"] = String(format: "%.0f", peak)
+
         return options
     }
 }

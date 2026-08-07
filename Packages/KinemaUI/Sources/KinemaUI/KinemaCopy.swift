@@ -120,6 +120,10 @@ public enum KinemaCopy {
     public static let upNextCancel = "Not now"
     public static let upNextSettingsSubtitle =
         "During the closing moments of a series episode, offer the next title with a short countdown. Skipping ahead marks the current episode watched."
+    public static let hdrToneMapping = "HDR tone mapping"
+    public static let hdrToneMappingSubtitle =
+        "Map HDR video for typical displays. Force uses a stronger curve; Off hard-clips highlights."
+    public static let hdrTargetPeak = "HDR target peak"
     public static let captions = "Subtitles"
     public static let captionsOff = "Off"
     public static let captionsEmbedded = "In this video"

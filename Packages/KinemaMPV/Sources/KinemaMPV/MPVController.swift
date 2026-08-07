@@ -13,9 +13,15 @@ public protocol MPVRenderSurface: AnyObject {
 
 /// Thread-safe mpv controller — only class that talks to libmpv C APIs.
 public final class MPVController: @unchecked Sendable {
+    private static let commandQueueKey = DispatchSpecificKey<UInt8>()
+
     private var handle: OpaquePointer?
     private let eventQueue = DispatchQueue(label: "io.kinema.mpv.events", qos: .userInitiated)
-    private let commandQueue = DispatchQueue(label: "io.kinema.mpv.commands", qos: .userInitiated)
+    private let commandQueue: DispatchQueue = {
+        let queue = DispatchQueue(label: "io.kinema.mpv.commands", qos: .userInitiated)
+        queue.setSpecific(key: commandQueueKey, value: 1)
+        return queue
+    }()
     private var isRunning = false
     private weak var renderSurface: MPVRenderSurface?
     private var isInitialized = false
@@ -302,6 +308,47 @@ public final class MPVController: @unchecked Sendable {
     public func setAudioDevice(_ deviceID: String) {
         let trimmed = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
         setStringOption(MPVProperty.audioDevice.rawValue, trimmed.isEmpty ? "auto" : trimmed)
+    }
+
+    /// Best-effort HDR tone-map props (unsupported builds no-op via command path).
+    /// Prefer setting these at init; live re-apply of compute-peak on 4K HDR can stall GLES.
+    public func applyHDRToneMapping(mode: String, computePeak: String, targetPeak: Double) {
+        setStringOption(MPVOption.toneMapping.rawValue, mode)
+        setStringOption(MPVOption.hdrComputePeak.rawValue, computePeak)
+        // Prefer string set for broader mpv compatibility (some builds reject DOUBLE for target-peak).
+        setStringOption(MPVOption.targetPeak.rawValue, String(format: "%.0f", targetPeak))
+    }
+
+    /// True when the current video looks like HDR (PQ/HLG transfer, or BT.2020 with sig-peak).
+    public func isHDRContent() -> Bool {
+        guard isInitialized, !isShuttingDown else { return false }
+        // Avoid nested sync if we're already hopping through commandQueue from another snapshot.
+        let work = { [weak self] () -> Bool in
+            guard let self, self.isInitialized, !self.isShuttingDown, self.handle != nil else { return false }
+            let gamma = (self.getString(MPVProperty.videoParamsGamma.rawValue) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            if gamma.contains("pq")
+                || gamma.contains("hlg")
+                || gamma.contains("bt.2100")
+                || gamma.contains("smpte2084") {
+                return true
+            }
+
+            let primaries = (self.getString(MPVProperty.videoParamsPrimaries.rawValue) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let sigPeak = self.getDouble(MPVProperty.videoParamsSigPeak.rawValue) ?? 0
+            if primaries.contains("bt.2020") || primaries.contains("bt2020") {
+                return sigPeak > 1.01
+            }
+            return sigPeak > 1.5
+        }
+
+        if DispatchQueue.getSpecific(key: Self.commandQueueKey) != nil {
+            return work()
+        }
+        return commandQueue.sync(execute: work)
     }
 
     public func cycleAudio() {

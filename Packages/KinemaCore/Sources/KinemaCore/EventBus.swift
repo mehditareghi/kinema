@@ -9,6 +9,7 @@ public enum KinemaEvent: Sendable {
     case error(String)
     case tracksUpdated([Track])
     case chaptersUpdated([Chapter])
+    case upNextOfferChanged
     case osdMessage(String)
     case watchProgressUpdated
     case resumedFrom(TimeInterval)

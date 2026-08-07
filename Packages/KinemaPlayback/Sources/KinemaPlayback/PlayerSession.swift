@@ -14,6 +14,8 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var playlist: [MediaItem] = []
     public private(set) var tracks: [Track] = []
     public private(set) var chapters: [Chapter] = []
+    /// End-of-episode series offer (credits lead-in or EOF).
+    public private(set) var upNextOffer: UpNextOffer?
     /// A–B loop start; `nil` means unset (`ab-loop-a=no`).
     public private(set) var abLoopA: TimeInterval?
     /// A–B loop end; `nil` means unset (`ab-loop-b=no`).
@@ -106,6 +108,8 @@ public final class PlayerSession: PlaybackEngine {
     private var lastTrackRefresh = Date.distantPast
     private var lastChapterRefresh = Date.distantPast
     private var lastProgressSave = Date.distantPast
+    /// After "Not now", don't re-offer Up Next for this media until a new title loads.
+    private var upNextSuppressedForMediaID: String?
     private var securityScopedURLs: [URL] = []
     #if os(iOS) || os(tvOS)
     private var securityScopedMediaIDs = Set<String>()
@@ -151,6 +155,8 @@ public final class PlayerSession: PlaybackEngine {
         currentItem = nil
         tracks = []
         chapters = []
+        setUpNextOffer(nil)
+        upNextSuppressedForMediaID = nil
         clearABLoopState(applyToEngine: false)
         activeSubtitleTrackID = nil
         activeSecondarySubtitleTrackID = nil
@@ -243,6 +249,8 @@ public final class PlayerSession: PlaybackEngine {
         currentItem = resolvedItem
         tracks = []
         chapters = []
+        setUpNextOffer(nil)
+        upNextSuppressedForMediaID = nil
         clearABLoopState(applyToEngine: isPrepared)
         activeSubtitleTrackID = nil
         activeSecondarySubtitleTrackID = nil
@@ -666,36 +674,146 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     public func playNext() {
+        playNext(startFromBeginning: false)
+    }
+
+    public func playNext(startFromBeginning: Bool) {
         guard playlistIndex + 1 < playlist.count else { return }
-        playlistIndex += 1
-        let next = playlist[playlistIndex]
+        playPlaylistItem(at: playlistIndex + 1, startFromBeginning: startFromBeginning)
+    }
+
+    public func playPrevious() {
+        guard !playlist.isEmpty else { return }
+        playPlaylistItem(at: max(playlistIndex - 1, 0), startFromBeginning: false)
+    }
+
+    /// Peek the upcoming Up Next title when a credits card would apply (thumbnail warm-up).
+    public func peekSeriesUpNext() -> (item: MediaItem, episode: MediaEpisodeIdentity?)? {
+        guard PreferencesStore.shared.preferences.seriesUpNextEnabled else { return nil }
+        guard let candidate = nextUpNextCandidate() else { return nil }
+        return (candidate.item, candidate.episode)
+    }
+
+    public func confirmUpNext() {
+        guard let offer = upNextOffer else { return }
+        markCurrentItemWatched()
+        setUpNextOffer(nil)
+        playPlaylistItem(at: offer.playlistIndex, startFromBeginning: true)
+    }
+
+    /// Dismiss the card; credits keep playing (or stay on the finished frame).
+    public func dismissUpNext() {
+        guard upNextOffer != nil else { return }
+        if let current = currentItem {
+            upNextSuppressedForMediaID = WatchProgressStore.mediaID(for: current.url)
+        }
+        setUpNextOffer(nil)
+    }
+
+    private func setUpNextOffer(_ offer: UpNextOffer?) {
+        guard upNextOffer != offer else { return }
+        upNextOffer = offer
+        EventBus.shared.emit(.upNextOfferChanged)
+    }
+
+    private func markCurrentItemWatched() {
+        guard let item = currentItem else { return }
+        let duration = max(info.duration, info.position, 1)
+        WatchProgressStore.markWatched(item: item, duration: duration)
+        if let context = historyContext {
+            HistoryStore.recordPlayback(
+                context: context,
+                item: item,
+                position: duration,
+                duration: duration
+            )
+        }
+    }
+
+    private struct UpNextCandidate {
+        let item: MediaItem
+        let episode: MediaEpisodeIdentity?
+        let playlistIndex: Int
+    }
+
+    /// Prefer the next series file of the same show (part-aware: E00 → E00.Part2 → E01);
+    /// otherwise the immediate next playlist item (folder / multi-select play).
+    private func nextUpNextCandidate() -> UpNextCandidate? {
+        guard let current = currentItem, !playlist.isEmpty else { return nil }
+        let start = min(playlistIndex + 1, playlist.count)
+        guard start < playlist.count else { return nil }
+
+        let remaining = Array(playlist[start...])
+        let remainingURLs = remaining.map(\.url)
+
+        if let series = MediaSeriesOrganizer.nextEpisode(after: current.url, in: remainingURLs),
+           let index = playlistIndex(for: series.url, in: playlist) {
+            return UpNextCandidate(item: playlist[index], episode: series.identity, playlistIndex: index)
+        }
+
+        let immediate = playlist[start]
+        if let identity = MediaSeriesOrganizer.seriesContinuation(from: current.url, to: immediate.url) {
+            return UpNextCandidate(item: immediate, episode: identity, playlistIndex: start)
+        }
+
+        return UpNextCandidate(item: immediate, episode: nil, playlistIndex: start)
+    }
+
+    private func presentUpNextIfPossible() -> Bool {
+        guard PreferencesStore.shared.preferences.seriesUpNextEnabled else { return false }
+        guard let current = currentItem else { return false }
+        let mediaID = WatchProgressStore.mediaID(for: current.url)
+        guard upNextSuppressedForMediaID != mediaID else { return false }
+        guard let candidate = nextUpNextCandidate() else { return false }
+        setUpNextOffer(
+            UpNextOffer(
+                item: candidate.item,
+                episode: candidate.episode,
+                playlistIndex: candidate.playlistIndex
+            )
+        )
+        return true
+    }
+
+    /// Netflix-style: float the card during the credits window while playback continues.
+    private func considerCreditsUpNextOffer() {
+        guard upNextOffer == nil else { return }
+        guard state == .playing else { return }
+        guard PreferencesStore.shared.preferences.seriesUpNextEnabled else { return }
+        guard let current = currentItem else { return }
+        let mediaID = WatchProgressStore.mediaID(for: current.url)
+        guard upNextSuppressedForMediaID != mediaID else { return }
+
+        let duration = info.duration
+        let position = info.position
+        guard duration >= UpNextOffer.minimumDurationForCreditsLeadIn else { return }
+        let remaining = duration - position
+        guard remaining > 0.35, remaining <= UpNextOffer.creditsLeadIn else { return }
+        _ = presentUpNextIfPossible()
+    }
+
+    private func playPlaylistItem(at index: Int, startFromBeginning: Bool) {
+        guard playlist.indices.contains(index) else { return }
+        setUpNextOffer(nil)
+        playlistIndex = index
+        let item = playlist[index]
         Task {
             do {
-                try await load(next)
+                try await load(item, startPosition: startFromBeginning ? 0 : nil)
                 play()
             } catch {
                 NSLog(
-                    "Kinema: failed to play next %@ — %@",
-                    next.url.lastPathComponent,
+                    "Kinema: failed to play up-next %@ — %@",
+                    item.url.lastPathComponent,
                     error.localizedDescription
                 )
-                // Skip a bad title and keep walking the folder playlist.
-                if playlistIndex + 1 < playlist.count {
-                    playNext()
+                if index + 1 < playlist.count {
+                    playPlaylistItem(at: index + 1, startFromBeginning: startFromBeginning)
                 } else {
                     state = .idle
                     EventBus.shared.emit(.playlistEnded)
                 }
             }
-        }
-    }
-
-    public func playPrevious() {
-        guard !playlist.isEmpty else { return }
-        playlistIndex = max(playlistIndex - 1, 0)
-        Task {
-            try? await load(playlist[playlistIndex])
-            play()
         }
     }
 
@@ -1541,12 +1659,32 @@ public final class PlayerSession: PlaybackEngine {
         defer { isHandlingPlaybackFinish = false }
 
         stopPositionUpdates()
-        recordHistory()
+        markCurrentItemWatched()
 
-        if playlistIndex + 1 < playlist.count {
+        // Credits card already visible — freeze on the last frame until Play Now / Not now.
+        if upNextOffer != nil {
+            controller.pause()
+            state = .paused
+            info.isPaused = true
+            EventBus.shared.emit(.stateChanged(state))
+            EventBus.shared.emit(.playbackInfoUpdated(info))
+            return
+        }
+
+        if let candidate = nextUpNextCandidate() {
+            if presentUpNextIfPossible() {
+                controller.pause()
+                state = .paused
+                info.isPaused = true
+                EventBus.shared.emit(.stateChanged(state))
+                EventBus.shared.emit(.playbackInfoUpdated(info))
+                return
+            }
+
+            // Pref off / suppressed — still advance to the part-aware next candidate.
             state = .loading
             EventBus.shared.emit(.stateChanged(state))
-            playNext()
+            playPlaylistItem(at: candidate.playlistIndex, startFromBeginning: true)
         } else {
             state = .idle
             EventBus.shared.emit(.playlistEnded)
@@ -1576,15 +1714,28 @@ public final class PlayerSession: PlaybackEngine {
             return
         }
         let updated = controller.playbackInfo()
-        guard abs(updated.position - info.position) > 0.05
+        let changed = abs(updated.position - info.position) > 0.05
             || updated.isPaused != info.isPaused
-            || abs(updated.duration - info.duration) > 0.5 else { return }
-        info = updated
-        if state == .loaded || state == .playing || state == .paused {
-            state = updated.isPaused ? .paused : .playing
+            || abs(updated.duration - info.duration) > 0.5
+            || (info.duration <= 0 && updated.duration > 0)
+
+        if changed {
+            info = updated
+            if state == .loaded || state == .playing || state == .paused {
+                state = updated.isPaused ? .paused : .playing
+            }
+            maybeSaveWatchProgress()
+            EventBus.shared.emit(.playbackInfoUpdated(info))
         }
-        maybeSaveWatchProgress()
-        EventBus.shared.emit(.playbackInfoUpdated(info))
+
+        // Evaluate credits Up Next even when the position delta was tiny.
+        if !updated.isPaused {
+            if !changed, updated.duration > 0 {
+                info.position = updated.position
+                info.duration = updated.duration
+            }
+            considerCreditsUpNextOffer()
+        }
     }
 
     private func maybeSaveWatchProgress() {

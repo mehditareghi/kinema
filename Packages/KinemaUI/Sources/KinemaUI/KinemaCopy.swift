@@ -114,6 +114,12 @@ public enum KinemaCopy {
     public static let chapters = "Chapters"
     public static let chaptersNoneAvailable = "This title has no chapters."
     public static let abLoop = "A–B Loop"
+    public static let upNext = "Up Next"
+    public static let upNextPlayingIn = "Playing in"
+    public static let upNextPlayNow = "Play Now"
+    public static let upNextCancel = "Not now"
+    public static let upNextSettingsSubtitle =
+        "During the closing moments of a series episode, offer the next title with a short countdown. Skipping ahead marks the current episode watched."
     public static let captions = "Subtitles"
     public static let captionsOff = "Off"
     public static let captionsEmbedded = "In this video"

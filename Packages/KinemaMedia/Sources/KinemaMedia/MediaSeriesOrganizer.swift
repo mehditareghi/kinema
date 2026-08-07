@@ -51,6 +51,16 @@ struct ParsedEpisode: Sendable, Equatable {
     let showTitle: String
     let season: Int
     let episode: Int
+    /// `nil` = main/unsplit file; `2` for `S01E00.Part2`, etc.
+    let part: Int?
+
+    var identity: MediaEpisodeIdentity {
+        MediaEpisodeIdentity(showTitle: showTitle, season: season, episode: episode, part: part)
+    }
+
+    var episodeKey: String {
+        "\(showKey)-s\(season)-e\(episode)"
+    }
 }
 
 /// TV episode identity parsed from a media filename (`Show.S01E02…`).
@@ -58,32 +68,85 @@ public struct MediaEpisodeIdentity: Sendable, Equatable {
     public let showTitle: String
     public let season: Int
     public let episode: Int
+    /// Multi-part suffix when present (`S01E00.Part2` → `2`); otherwise `nil`.
+    public let part: Int?
 
     public var displayLabel: String {
-        String(format: "%@ · S%02dE%02d", showTitle, season, episode)
+        "\(showTitle) · \(seasonEpisodeCode)"
     }
 
-    public init(showTitle: String, season: Int, episode: Int) {
+    public var seasonEpisodeCode: String {
+        let base = String(format: "S%02dE%02d", season, episode)
+        guard let part else { return base }
+        return "\(base) · Part \(part)"
+    }
+
+    public init(showTitle: String, season: Int, episode: Int, part: Int? = nil) {
         self.showTitle = showTitle
         self.season = season
         self.episode = episode
+        self.part = part
     }
 }
 
 public enum MediaSeriesOrganizer {
     private static let episodeRegex: NSRegularExpression = {
-        let pattern = #"^(.+?)[\.\-_ ]*[Ss](\d{1,2})\s*[Ee](\d{1,2})(?:[\.\-_ ].*)?$"#
+        // Show.S01E02… / Show_S1E2… / Show 1x02…
+        let pattern = #"^(.+?)[\.\-_ ]*(?:[Ss](\d{1,2})\s*[Ee](\d{1,2})|(\d{1,2})\s*[xX]\s*(\d{1,3}))(?:[\.\-_ ].*)?$"#
         return try! NSRegularExpression(pattern: pattern, options: [])
     }()
 
-    /// Parses `Show.S01E02` / `Show_S1E2` style stems from a media URL.
+    private static let partRegex: NSRegularExpression = {
+        let pattern = #"(?i)(?:^|[\.\-_ ])(?:part|pt)[\.\-_ ]*0*(\d+)"#
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
+
+    /// Parses `Show.S01E02` / `Show_S1E2` / `Show 1x02` style stems from a media URL.
     public static func episodeIdentity(from url: URL) -> MediaEpisodeIdentity? {
-        guard let parsed = parseEpisode(from: url) else { return nil }
-        return MediaEpisodeIdentity(
-            showTitle: parsed.showTitle,
-            season: parsed.season,
-            episode: parsed.episode
-        )
+        parseEpisode(from: url)?.identity
+    }
+
+    /// True when both URLs belong to the same parsed show.
+    public static func isSameShow(lhs: URL, rhs: URL) -> Bool {
+        guard let a = parseEpisode(from: lhs), let b = parseEpisode(from: rhs) else { return false }
+        return a.showKey == b.showKey
+    }
+
+    /// Next title continues the same show later in season/episode/part order
+    /// (e.g. `S01E00` → `S01E00.Part2` → `S01E01`).
+    public static func seriesContinuation(from currentURL: URL, to nextURL: URL) -> MediaEpisodeIdentity? {
+        guard let current = parseEpisode(from: currentURL),
+              let next = parseEpisode(from: nextURL),
+              current.showKey == next.showKey else { return nil }
+        guard playbackOrder(next) > playbackOrder(current) else { return nil }
+        return next.identity
+    }
+
+    /// Best following file of the same show after `currentURL` within `urls`.
+    /// Orders by season → episode → part (`S01E00` then `S01E00.Part2` then `S01E01`).
+    public static func nextEpisode(after currentURL: URL, in urls: [URL]) -> (url: URL, identity: MediaEpisodeIdentity)? {
+        guard let current = parseEpisode(from: currentURL) else { return nil }
+        let currentOrder = playbackOrder(current)
+
+        let candidates: [ParsedEpisode] = urls.compactMap { url in
+            guard let parsed = parseEpisode(from: url), parsed.showKey == current.showKey else { return nil }
+            guard playbackOrder(parsed) > currentOrder else { return nil }
+            return parsed
+        }
+
+        guard let best = candidates.min(by: { lhs, rhs in
+            let lo = playbackOrder(lhs)
+            let ro = playbackOrder(rhs)
+            if lo != ro { return lo < ro }
+            return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
+        }) else { return nil }
+
+        return (best.url, best.identity)
+    }
+
+    /// Season → episode → part (`nil` / main file sorts before Part 2).
+    private static func playbackOrder(_ episode: ParsedEpisode) -> (Int, Int, Int) {
+        (episode.season, episode.episode, episode.part ?? 0)
     }
 
     public static func organize(
@@ -229,28 +292,61 @@ public enum MediaSeriesOrganizer {
         let stem = url.deletingPathExtension().lastPathComponent
         let range = NSRange(stem.startIndex..., in: stem)
         guard let match = episodeRegex.firstMatch(in: stem, range: range),
-              match.numberOfRanges >= 4,
-              let showRange = Range(match.range(at: 1), in: stem),
-              let seasonRange = Range(match.range(at: 2), in: stem),
-              let episodeRange = Range(match.range(at: 3), in: stem) else { return nil }
+              match.numberOfRanges >= 6,
+              let showRange = Range(match.range(at: 1), in: stem) else { return nil }
+
+        let season: Int
+        let episode: Int
+        let episodeEndIndex: String.Index
+        if match.range(at: 2).location != NSNotFound,
+           let seasonRange = Range(match.range(at: 2), in: stem),
+           let episodeRange = Range(match.range(at: 3), in: stem) {
+            guard let s = Int(stem[seasonRange]), let e = Int(stem[episodeRange]) else { return nil }
+            season = s
+            episode = e
+            episodeEndIndex = episodeRange.upperBound
+        } else if match.range(at: 4).location != NSNotFound,
+                  let seasonRange = Range(match.range(at: 4), in: stem),
+                  let episodeRange = Range(match.range(at: 5), in: stem) {
+            guard let s = Int(stem[seasonRange]), let e = Int(stem[episodeRange]) else { return nil }
+            season = s
+            episode = e
+            episodeEndIndex = episodeRange.upperBound
+        } else {
+            return nil
+        }
 
         let showRaw = String(stem[showRange])
             .trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
-        guard !showRaw.isEmpty,
-              let season = Int(stem[seasonRange]),
-              let episode = Int(stem[episodeRange]) else { return nil }
+        guard !showRaw.isEmpty else { return nil }
 
         let showTitle = formatDisplayName(showRaw)
         let showKey = normalizeKey(showRaw)
         guard !showKey.isEmpty else { return nil }
+
+        let suffix = String(stem[episodeEndIndex...])
+        let part = parsePartNumber(in: suffix)
 
         return ParsedEpisode(
             url: url,
             showKey: showKey,
             showTitle: showTitle,
             season: season,
-            episode: episode
+            episode: episode,
+            part: part
         )
+    }
+
+    private static func parsePartNumber(in suffix: String) -> Int? {
+        let trimmed = suffix.trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
+        guard !trimmed.isEmpty else { return nil }
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard let match = partRegex.firstMatch(in: trimmed, range: range),
+              match.numberOfRanges >= 2,
+              let partRange = Range(match.range(at: 1), in: trimmed),
+              let part = Int(trimmed[partRange]),
+              part > 0 else { return nil }
+        return part
     }
 
     private static func normalizeKey(_ value: String) -> String {

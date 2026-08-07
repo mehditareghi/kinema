@@ -54,11 +54,16 @@ public struct SettingsView: View {
         VStack(spacing: 16) {
             KinemaCard(title: "Playback", icon: "play.circle") {
                 SettingsToggleRow(title: "Resume playback", subtitle: "Continue videos from the last watched position.", isOn: binding(\.resumePlayback))
+                SettingsToggleRow(
+                    title: KinemaCopy.upNext,
+                    subtitle: KinemaCopy.upNextSettingsSubtitle,
+                    isOn: binding(\.seriesUpNextEnabled)
+                )
                 SettingsSliderRow(title: "Default volume", valueText: "\(Int(preferences.preferences.volume))%", value: Binding(
                     get: { preferences.preferences.volume },
                     set: { PlayerSessionPool.sharedSession().setVolume($0) }
                 ), range: 0...KinemaPreferences.volumeMax)
-                SettingsSliderRow(title: "Playback speed", valueText: String(format: "%.2gx", preferences.preferences.speed), value: Binding(
+                SettingsSliderRow(title: "Playback speed", valueText: PlaybackSpeedControl.formatSpeed(preferences.preferences.speed), value: Binding(
                     get: { preferences.preferences.speed },
                     set: { PlayerSessionPool.sharedSession().setSpeed($0) }
                 ), range: 0.25...4, step: 0.25)

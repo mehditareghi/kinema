@@ -24,6 +24,8 @@ public final class PlayerViewModel {
     public var showAudio = false
     public var showChapters = false
     public var showSettings = false
+    /// Mirrored from the session so SwiftUI reliably refreshes the Up Next card.
+    public private(set) var upNextOffer: UpNextOffer?
     public var librarySection: LibrarySection = .collection
     public let libraryBrowse = LibraryBrowseState()
 
@@ -36,6 +38,7 @@ public final class PlayerViewModel {
     public init(session: PlayerSession? = nil) {
         self.session = session ?? PlayerSessionPool.sharedSession()
         self.isMuted = PreferencesStore.shared.preferences.isMuted
+        self.upNextOffer = self.session.upNextOffer
         eventBusToken = EventBus.shared.subscribe { [weak self] event in
             Task { @MainActor in
                 self?.handleEvent(event)
@@ -130,7 +133,7 @@ public final class PlayerViewModel {
     }
 
     public func toggleControls() {
-        guard isInPlayer, session.currentItem != nil else { return }
+        guard isInPlayer, session.currentItem != nil, upNextOffer == nil else { return }
         hideControlsTask?.cancel()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             showControls.toggle()
@@ -140,7 +143,7 @@ public final class PlayerViewModel {
         }
     }
 
-    public func scheduleHideControls(after seconds: TimeInterval = 4) {
+    public func scheduleHideControls(after seconds: TimeInterval = 6) {
         guard isInPlayer, !showSettings, !showAudio, !showChapters, !showSubtitles, !showPlaylist else { return }
         hideControlsTask?.cancel()
         hideControlsTask = Task {
@@ -164,6 +167,40 @@ public final class PlayerViewModel {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             osdMessage = nil
+        }
+    }
+
+    public func confirmUpNext() {
+        guard session.upNextOffer != nil else { return }
+        showControls = false
+        let label = session.upNextOffer?.osdLabel
+        session.confirmUpNext()
+        upNextOffer = session.upNextOffer
+        if let label {
+            showOSD(label)
+        }
+    }
+
+    public func dismissUpNext() {
+        guard session.upNextOffer != nil else { return }
+        session.dismissUpNext()
+        upNextOffer = session.upNextOffer
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showControls = true
+        }
+    }
+
+    public func prefetchUpNextIfNeeded(position: TimeInterval) {
+        let duration = session.info.duration
+        guard duration > 30, position > duration - 60 else { return }
+        guard let peek = session.peekSeriesUpNext() else { return }
+        let url = peek.item.url
+        Task(priority: .utility) {
+            if VideoThumbnailLoader.cachedPreview(for: url) != nil { return }
+            _ = await VideoThumbnailLoader.loadPreview(
+                url: url,
+                at: VideoThumbnailLoader.preferredTime(for: WatchProgressStore.entry(for: url))
+            )
         }
     }
 
@@ -236,6 +273,15 @@ public final class PlayerViewModel {
             }
         case .resumedFrom(let position):
             showOSD("Resuming from \(formatTime(position))")
+        case .upNextOfferChanged:
+            let offer = session.upNextOffer
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+                upNextOffer = offer
+            }
+            if offer != nil {
+                cancelAutoHideControls()
+                showControls = false
+            }
         default:
             break
         }

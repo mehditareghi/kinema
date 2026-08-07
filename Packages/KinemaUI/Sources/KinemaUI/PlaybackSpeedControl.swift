@@ -18,6 +18,25 @@ struct PlaybackSpeedControl: View {
     static let inlineMinChromeWidth: CGFloat = 700
     static let inlineSliderWidth: CGFloat = 248
 
+    /// Keeps meaningful decimals (`1.25×`); `%.2g` wrongly truncates to `1.2×`.
+    static func formatSpeed(_ speed: Double) -> String {
+        "\(formatSpeedValue(speed))×"
+    }
+
+    static func formatSpeedValue(_ speed: Double) -> String {
+        if abs(speed - speed.rounded()) < 0.001 {
+            return String(format: "%.0f", speed)
+        }
+        var text = String(format: "%.2f", speed)
+        while text.hasSuffix("0") {
+            text.removeLast()
+        }
+        if text.hasSuffix(".") {
+            text.removeLast()
+        }
+        return text
+    }
+
     var body: some View {
         Group {
             switch style {
@@ -37,7 +56,7 @@ struct PlaybackSpeedControl: View {
                 .frame(width: Self.inlineSliderWidth, height: 44)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Playback speed")
-                .accessibilityValue(String(format: "%.2g times", viewModel.session.info.speed))
+                .accessibilityValue("\(Self.formatSpeedValue(viewModel.session.info.speed)) times")
             case .menu:
                 compactMenu
             }
@@ -53,7 +72,7 @@ struct PlaybackSpeedControl: View {
                 let speed = Self.steps[index]
                 guard abs(viewModel.session.info.speed - speed) >= 0.01 else { return }
                 viewModel.session.setSpeed(speed)
-                viewModel.showOSD(String(format: "%.2g×", speed))
+                viewModel.showOSD(Self.formatSpeed(speed))
             }
         )
     }
@@ -63,19 +82,19 @@ struct PlaybackSpeedControl: View {
             ForEach(Self.steps, id: \.self) { speed in
                 Button {
                     viewModel.session.setSpeed(speed)
-                    viewModel.showOSD(String(format: "%.2g×", speed))
+                    viewModel.showOSD(Self.formatSpeed(speed))
                     viewModel.scheduleHideControls()
                 } label: {
                     if abs(viewModel.session.info.speed - speed) < 0.01 {
-                        Label(String(format: "%.2g×", speed), systemImage: "checkmark")
+                        Label(Self.formatSpeed(speed), systemImage: "checkmark")
                     } else {
-                        Text(String(format: "%.2g×", speed))
+                        Text(Self.formatSpeed(speed))
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(String(format: "%.2g×", viewModel.session.info.speed))
+                Text(Self.formatSpeed(viewModel.session.info.speed))
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption2.weight(.semibold))
@@ -112,8 +131,7 @@ struct PlaybackSpeedControl: View {
     static func shortLabel(for speed: Double) -> String {
         if abs(speed - 0.5) < 0.01 { return ".5" }
         if abs(speed - 0.75) < 0.01 { return ".75" }
-        if speed == speed.rounded() { return String(format: "%.0f", speed) }
-        return String(format: "%g", speed)
+        return formatSpeedValue(speed)
     }
 }
 

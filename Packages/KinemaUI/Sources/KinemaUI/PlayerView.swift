@@ -36,11 +36,13 @@ public struct PlayerView: View {
             playerTapLayer
 
             #if os(iOS) || os(macOS)
-            PlayerSideGestureOverlay(viewModel: viewModel, accent: accent)
-                .zIndex(2)
+            if viewModel.upNextOffer == nil {
+                PlayerSideGestureOverlay(viewModel: viewModel, accent: accent)
+                    .zIndex(2)
+            }
             #endif
 
-            if viewModel.showControls {
+            if viewModel.showControls, viewModel.upNextOffer == nil {
                 PlayerControlsOverlay(viewModel: viewModel, accent: accent)
                     .transition(.opacity)
                     .zIndex(1)
@@ -49,7 +51,20 @@ public struct PlayerView: View {
             OSDOverlay(message: viewModel.osdMessage)
                 .zIndex(3)
 
-            if preferences.preferences.audioVisualizationEnabled, viewModel.isInPlayer {
+            if let offer = viewModel.upNextOffer {
+                UpNextOverlay(
+                    offer: offer,
+                    accent: accent,
+                    onPlayNow: { viewModel.confirmUpNext() },
+                    onCancel: { viewModel.dismissUpNext() }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(5)
+            }
+
+            if preferences.preferences.audioVisualizationEnabled,
+               viewModel.isInPlayer,
+               viewModel.upNextOffer == nil {
                 AudioVisualizationOverlay(
                     volume: viewModel.isMuted ? 0 : viewModel.session.info.volume,
                     isPaused: viewModel.session.info.isPaused,
@@ -62,6 +77,7 @@ public struct PlayerView: View {
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: viewModel.showControls)
+        .animation(.spring(response: 0.45, dampingFraction: 0.88), value: viewModel.upNextOffer?.id)
         .animation(.easeOut(duration: 0.2), value: preferences.preferences.audioVisualizationEnabled)
         .onChange(of: viewModel.isInPlayer) { _, _ in
             ScreenWakeLock.apply(
@@ -125,11 +141,32 @@ public struct PlayerView: View {
         }
         #if os(macOS)
         .onKeyPress { press in
+            if viewModel.upNextOffer != nil {
+                if press.key == .escape {
+                    viewModel.dismissUpNext()
+                    return .handled
+                }
+                if press.key == .return || press.characters == " " {
+                    viewModel.confirmUpNext()
+                    return .handled
+                }
+            }
             guard viewModel.handlesKey(press.characters) else { return .ignored }
             viewModel.handleKey(press.characters)
             return .handled
         }
         #endif
+        .onChange(of: viewModel.upNextOffer?.id) { _, offerID in
+            if offerID != nil {
+                viewModel.cancelAutoHideControls()
+                withAnimation(.easeOut(duration: 0.2)) {
+                    viewModel.showControls = false
+                }
+            }
+        }
+        .onChange(of: viewModel.session.info.position) { _, position in
+            viewModel.prefetchUpNextIfNeeded(position: position)
+        }
     }
 
     @ViewBuilder
@@ -137,15 +174,21 @@ public struct PlayerView: View {
         #if os(iOS) || os(tvOS)
         Color.clear
             .contentShape(Rectangle())
-            .onTapGesture { viewModel.toggleControls() }
+            .onTapGesture {
+                guard viewModel.upNextOffer == nil else { return }
+                viewModel.toggleControls()
+            }
             .ignoresSafeArea()
-            .allowsHitTesting(!viewModel.showControls)
+            .allowsHitTesting(!viewModel.showControls && viewModel.upNextOffer == nil)
         #elseif os(macOS)
         Color.clear
             .contentShape(Rectangle())
-            .onTapGesture { viewModel.toggleControls() }
+            .onTapGesture {
+                guard viewModel.upNextOffer == nil else { return }
+                viewModel.toggleControls()
+            }
             .ignoresSafeArea()
-            .allowsHitTesting(!viewModel.showControls)
+            .allowsHitTesting(!viewModel.showControls && viewModel.upNextOffer == nil)
         #endif
     }
 }

@@ -80,7 +80,7 @@ struct PlayerSideGestureOverlay: View {
                         .onTapGesture {
                             // Ignore the second tap of a double-tap pair (it also hits onTapGesture).
                             if let lastDoubleTapAt,
-                               Date().timeIntervalSince(lastDoubleTapAt) < 0.4 {
+                               Date().timeIntervalSince(lastDoubleTapAt) < 0.28 {
                                 return
                             }
                             scheduleSingleTapChromeToggle()
@@ -141,8 +141,9 @@ struct PlayerSideGestureOverlay: View {
     private func scheduleSingleTapChromeToggle() {
         pendingSingleTap?.cancel()
         pendingSingleTap = Task { @MainActor in
-            // Past iOS double-tap window so chrome toggle never overlaps ±10s seek.
-            try? await Task.sleep(for: .milliseconds(300))
+            // Slightly under the system double-tap window so chrome feels snappier,
+            // while still usually losing to SpatialTapGesture(count: 2).
+            try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
             guard panMode == .none else { return }
             viewModel.toggleControls()

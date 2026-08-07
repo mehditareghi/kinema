@@ -426,8 +426,12 @@ public struct LibraryBrowserView: View {
                         newFolderName = ""
                         showNewFolderAlert = true
                     } label: {
-                        Label(KinemaCopy.newFolder, systemImage: "plus.rectangle.on.folder")
-                            .labelStyle(.iconOnly)
+                        Label {
+                            Text(KinemaCopy.newFolder)
+                        } icon: {
+                            breadcrumbToolbarIcon("plus.rectangle.on.folder")
+                        }
+                        .labelStyle(.iconOnly)
                     }
                     .buttonStyle(.bordered)
                     .tint(accent)
@@ -436,8 +440,12 @@ public struct LibraryBrowserView: View {
                 Button {
                     forceRescan()
                 } label: {
-                    Label(KinemaCopy.rescan, systemImage: "arrow.clockwise")
-                        .labelStyle(.iconOnly)
+                    Label {
+                        Text(KinemaCopy.rescan)
+                    } icon: {
+                        breadcrumbToolbarIcon("arrow.clockwise")
+                    }
+                    .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.bordered)
                 .tint(accent)
@@ -445,8 +453,12 @@ public struct LibraryBrowserView: View {
                 Button {
                     browse.goUp()
                 } label: {
-                    Label("Up", systemImage: "arrow.up")
-                        .labelStyle(.iconOnly)
+                    Label {
+                        Text("Up")
+                    } icon: {
+                        breadcrumbToolbarIcon("arrow.up")
+                    }
+                    .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.bordered)
                 .tint(accent)
@@ -456,29 +468,40 @@ public struct LibraryBrowserView: View {
                     Button {
                         browse.goToLibraryHome()
                     } label: {
-                        Label(KinemaCopy.backToCollection, systemImage: "square.grid.2x2")
-                            .labelStyle(.iconOnly)
+                        Label {
+                            Text(KinemaCopy.backToCollection)
+                        } icon: {
+                            breadcrumbToolbarIcon("square.grid.2x2")
+                        }
+                        .labelStyle(.iconOnly)
                     }
                     .buttonStyle(.bordered)
                     .tint(accent)
                 }
+
+                Spacer(minLength: 0)
             }
+            // Lock toolbar row height so optional New Folder / Back controls can't resize it.
+            .frame(height: 36, alignment: .leading)
+            .controlSize(.regular)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(browse.breadcrumbs) { crumb in
                         if crumb.id != browse.breadcrumbs.first?.id {
                             Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
+                                .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.tertiary)
+                                .frame(width: Self.breadcrumbIconSize, height: Self.breadcrumbIconSize)
                         }
 
                         breadcrumbButton(crumb: crumb)
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .frame(minHeight: 44, alignment: .center)
             }
+            .frame(height: 44)
             .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .padding(.horizontal, 12)
@@ -486,24 +509,39 @@ public struct LibraryBrowserView: View {
         .background(KinemaTheme.settingsBackground)
     }
 
+    private static let breadcrumbIconSize: CGFloat = 14
+
+    private func breadcrumbToolbarIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: Self.breadcrumbIconSize, weight: .semibold))
+            .frame(width: Self.breadcrumbIconSize, height: Self.breadcrumbIconSize)
+            .contentShape(Rectangle())
+    }
+
     private func breadcrumbButton(crumb: BrowseBreadcrumb) -> some View {
         Button {
             browse.navigateToBreadcrumb(crumb)
         } label: {
             HStack(spacing: 6) {
+                // Different SF Symbols (film.stack / folder / externaldrive) have unequal
+                // optical bounds — pin them so nested path chips stay the same height.
                 Image(systemName: crumb.systemImage)
+                    .font(.system(size: Self.breadcrumbIconSize, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
                     .foregroundStyle(crumb.isCurrent ? accent : .secondary)
+                    .frame(width: Self.breadcrumbIconSize, height: Self.breadcrumbIconSize)
+                    .contentShape(Rectangle())
                 Text(crumb.title)
                     .font(.subheadline.weight(crumb.isCurrent ? .semibold : .medium))
                     .foregroundStyle(crumb.isCurrent ? .primary : .secondary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, crumb.isCurrent ? 8 : 0)
-            .padding(.vertical, crumb.isCurrent ? 4 : 0)
+            // Same chrome metrics for every crumb — only the fill changes when current.
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(height: 28)
             .background {
-                if crumb.isCurrent {
-                    Capsule().fill(accent.opacity(0.12))
-                }
+                Capsule().fill(crumb.isCurrent ? accent.opacity(0.12) : .clear)
             }
         }
         .buttonStyle(.plain)

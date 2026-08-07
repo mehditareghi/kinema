@@ -18,7 +18,7 @@ public enum LibraryMediaPaths {
         "Inbox"
     ]
 
-    private static let incompleteNameSuffixes = [
+    public static let incompleteNameSuffixes = [
         ".download", ".part", ".partial", ".tmp", ".temp", ".crdownload", ".iktemp"
     ]
 

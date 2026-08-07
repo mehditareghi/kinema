@@ -78,15 +78,15 @@ public struct SettingsView: View {
                     isOn: binding(\.forcedSubtitlesOnly)
                 )
 
-                HStack {
-                    Text("Preferred language")
-                    Spacer()
-                    TextField("en", text: binding(\.preferredSubtitleLanguage))
-                        .multilineTextAlignment(.trailing)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                        .frame(maxWidth: 120)
+                SettingsMenuRow(
+                    title: "Preferred language",
+                    value: SubtitlePreferenceCatalog.language(id: preferences.preferences.preferredSubtitleLanguage).displayName
+                ) {
+                    ForEach(SubtitlePreferenceCatalog.popularLanguages) { language in
+                        Button(language.displayName) {
+                            preferences.preferences.preferredSubtitleLanguage = language.id
+                        }
+                    }
                 }
 
                 SettingsMenuRow(
@@ -209,17 +209,6 @@ public struct SettingsView: View {
                             preferences.preferences.subtitleEncodingID = encoding.id
                         }
                     }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("OpenSubtitles API key")
-                    SecureField("Optional Api-Key", text: binding(\.openSubtitlesAPIKey))
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                    Text("Required to download online subtitles.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 

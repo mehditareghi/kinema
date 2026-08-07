@@ -53,11 +53,38 @@ struct ParsedEpisode: Sendable, Equatable {
     let episode: Int
 }
 
+/// TV episode identity parsed from a media filename (`Show.S01E02…`).
+public struct MediaEpisodeIdentity: Sendable, Equatable {
+    public let showTitle: String
+    public let season: Int
+    public let episode: Int
+
+    public var displayLabel: String {
+        String(format: "%@ · S%02dE%02d", showTitle, season, episode)
+    }
+
+    public init(showTitle: String, season: Int, episode: Int) {
+        self.showTitle = showTitle
+        self.season = season
+        self.episode = episode
+    }
+}
+
 public enum MediaSeriesOrganizer {
     private static let episodeRegex: NSRegularExpression = {
         let pattern = #"^(.+?)[\.\-_ ]*[Ss](\d{1,2})\s*[Ee](\d{1,2})(?:[\.\-_ ].*)?$"#
         return try! NSRegularExpression(pattern: pattern, options: [])
     }()
+
+    /// Parses `Show.S01E02` / `Show_S1E2` style stems from a media URL.
+    public static func episodeIdentity(from url: URL) -> MediaEpisodeIdentity? {
+        guard let parsed = parseEpisode(from: url) else { return nil }
+        return MediaEpisodeIdentity(
+            showTitle: parsed.showTitle,
+            season: parsed.season,
+            episode: parsed.episode
+        )
+    }
 
     public static func organize(
         videoURLs: [URL],

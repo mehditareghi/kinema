@@ -1,5 +1,6 @@
 import SwiftUI
 import KinemaCore
+import KinemaMedia
 import KinemaPlayback
 import KinemaSubtitles
 import UniformTypeIdentifiers
@@ -78,8 +79,11 @@ import AppKit
 
 public struct SubtitlePickerSheet: View {
     @Bindable var viewModel: PlayerViewModel
-    @State private var searchQuery = ""
-    @State private var results: [OpenSubtitlesResult] = []
+    @State private var results: [OnlineSubtitleResult] = []
+    @State private var searchLanguage = SubtitlePreferenceCatalog.language(
+        id: PreferencesStore.shared.preferences.preferredSubtitleLanguage
+    ).id
+    @State private var isSearchingOnline = false
     @State private var localMatches: [SubtitleMatch] = []
     @State private var showFileImporter = false
     @State private var pendingLoadURLs: [URL] = []
@@ -87,6 +91,7 @@ public struct SubtitlePickerSheet: View {
     @State private var loadEncodingID = PreferencesStore.shared.preferences.subtitleEncodingID
     @State private var downloadMessage: String?
     @State private var isDownloading = false
+    @State private var downloadingResultID: String?
     @Environment(\.dismiss) private var dismiss
 
     private var accent: Color { KinemaTheme.accent }
@@ -97,6 +102,11 @@ public struct SubtitlePickerSheet: View {
     }
 
     private var session: PlayerSession { viewModel.session }
+
+    private var detectedEpisode: MediaEpisodeIdentity? {
+        guard let url = session.currentItem?.url else { return nil }
+        return MediaSeriesOrganizer.episodeIdentity(from: url)
+    }
 
     public var body: some View {
         NavigationStack {
@@ -117,22 +127,15 @@ public struct SubtitlePickerSheet: View {
                     Button(KinemaCopy.done) { dismiss() }
                 }
             }
-            .searchable(text: $searchQuery, prompt: "Search OpenSubtitles")
-            .onSubmit(of: .search) {
-                Task {
-                    let client = OpenSubtitlesClient(apiKey: prefs.preferences.openSubtitlesAPIKey)
-                    results = (try? await client.search(
-                        query: searchQuery,
-                        language: prefs.preferences.preferredSubtitleLanguage
-                    )) ?? []
-                }
-            }
             .onAppear {
                 session.refreshCaptionTracks()
                 session.applyLiveSubtitlePreferences()
                 refreshLocalMatches()
                 session.refreshRememberedSubtitles()
                 loadEncodingID = prefs.preferences.subtitleEncodingID
+                searchLanguage = SubtitlePreferenceCatalog.language(
+                    id: prefs.preferences.preferredSubtitleLanguage
+                ).id
             }
             .fileImporter(
                 isPresented: $showFileImporter,
@@ -181,12 +184,12 @@ public struct SubtitlePickerSheet: View {
     private var captionsCards: some View {
         primaryTracksCard
         secondaryTracksCard
+        onlineSearchCard
         rememberedCard
         addSubtitlesCard
         syncCard
         layoutCard
         appearanceCard
-        onlineSearchCard
     }
 
     private var primaryTracksCard: some View {
@@ -209,7 +212,7 @@ public struct SubtitlePickerSheet: View {
                 }
             }
 
-            ForEach(session.externalSubtitleTracks) { track in
+            ForEach(uniqueExternalSubtitleTracks) { track in
                 captionRow(
                     title: SubtitleLabels.displayName(for: track),
                     subtitle: trackSubtitle(for: track, role: "External"),
@@ -231,8 +234,8 @@ public struct SubtitlePickerSheet: View {
             }
 
             if session.embeddedSubtitleTracks.isEmpty,
-               session.externalSubtitleTracks.isEmpty,
-               localMatches.isEmpty {
+               uniqueExternalSubtitleTracks.isEmpty,
+               unloadedLocalMatches.isEmpty {
                 Text(KinemaCopy.captionsNoneAvailable)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -389,12 +392,12 @@ public struct SubtitlePickerSheet: View {
 
     private var rememberedCard: some View {
         KinemaCard(title: "Saved for this title", icon: "pin.fill") {
-            if session.rememberedSubtitles.isEmpty {
+            if uniqueRememberedSubtitles.isEmpty {
                 Text("Subtitles you browse and add are remembered here for next time.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(session.rememberedSubtitles) { item in
+                ForEach(uniqueRememberedSubtitles) { item in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.displayName)
@@ -568,52 +571,124 @@ public struct SubtitlePickerSheet: View {
 
     @ViewBuilder
     private var onlineSearchCard: some View {
-        if !results.isEmpty || !searchQuery.isEmpty || downloadMessage != nil {
-            KinemaCard(title: KinemaCopy.captionsSearchOnline, icon: "globe") {
-                if let downloadMessage {
-                    Text(downloadMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                if results.isEmpty {
-                    Text("Search by title to browse OpenSubtitles results. Download needs an API key in Preferences.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(results) { result in
+        KinemaCard(title: KinemaCopy.captionsSearchOnline, icon: "globe") {
+            if let episode = detectedEpisode {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(episode.displayLabel)
+                        .font(.subheadline.weight(.semibold))
+                    if let first = results.first, let title = first.episodeTitle, !title.isEmpty {
+                        Text(title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    SettingsMenuRowInline(
+                        title: "Language",
+                        value: SubtitlePreferenceCatalog.language(id: searchLanguage).displayName
+                    ) {
+                        ForEach(SubtitlePreferenceCatalog.popularLanguages) { language in
+                            Button(language.displayName) {
+                                searchLanguage = language.id
+                                prefs.preferences.preferredSubtitleLanguage = language.id
+                            }
+                        }
+                    }
+
                     Button {
-                        Task { await downloadAndLoad(result) }
+                        Task { await searchOnline(for: episode) }
                     } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.fileName)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                Text(result.language.uppercased())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
                             Spacer()
-                            if isDownloading {
+                            if isSearchingOnline {
                                 ProgressView()
                                     .controlSize(.small)
                             } else {
-                                Image(systemName: "arrow.down.circle")
-                                    .foregroundStyle(accent)
+                                Text("Search")
                             }
+                            Spacer()
                         }
-                        .padding(.vertical, 2)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isDownloading)
+                    .buttonStyle(.borderedProminent)
+                    .tint(accent)
+                    .disabled(isSearchingOnline || isDownloading || searchLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Text("Saves the subtitle next to the video and remembers it for next time.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let downloadMessage {
+                        Text(downloadMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ForEach(results) { result in
+                        Button {
+                            Task { await downloadAndLoad(result) }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.version)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    Text(result.detailLine)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if downloadingResultID == result.id {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.down.circle")
+                                        .foregroundStyle(accent)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDownloading)
+                    }
                 }
+            } else {
+                Text("Online search works for TV episodes named like Show.S01E02.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
+    private var loadedSubtitlePaths: Set<String> {
+        session.loadedExternalSubtitlePaths
+    }
+
+    /// One row per unique external subtitle file path (mpv can otherwise surface duplicates).
+    private var uniqueExternalSubtitleTracks: [Track] {
+        var seen = Set<String>()
+        var unique: [Track] = []
+        for track in session.externalSubtitleTracks {
+            let key: String
+            if let filename = track.externalFilename, !filename.isEmpty {
+                key = URL(fileURLWithPath: filename).standardizedFileURL.path
+            } else {
+                key = "track:\(track.id)"
+            }
+            guard seen.insert(key).inserted else { continue }
+            unique.append(track)
+        }
+        return unique
+    }
+
+    /// Sidecars next to the video that are not already loaded — still offered in the list.
     private var unloadedLocalMatches: [SubtitleMatch] {
-        let loadedTitles = Set(session.externalSubtitleTracks.map(\.title))
-        return localMatches.filter { !loadedTitles.contains($0.label) }
+        localMatches.filter { !loadedSubtitlePaths.contains($0.url.standardizedFileURL.path) }
+    }
+
+    /// Remembered entries that are not already represented by a loaded external file.
+    private var uniqueRememberedSubtitles: [ManualSubtitleAssociation] {
+        session.rememberedSubtitles.filter {
+            !loadedSubtitlePaths.contains(URL(fileURLWithPath: $0.path).standardizedFileURL.path)
+        }
     }
 
     private func trackSubtitle(for track: Track, role: String) -> String {
@@ -685,16 +760,67 @@ public struct SubtitlePickerSheet: View {
         session.refreshRememberedSubtitles()
     }
 
-    private func downloadAndLoad(_ result: OpenSubtitlesResult) async {
-        isDownloading = true
+    private func searchOnline(for episode: MediaEpisodeIdentity) async {
+        isSearchingOnline = true
         downloadMessage = nil
-        defer { isDownloading = false }
+        results = []
+        defer { isSearchingOnline = false }
+
+        let language = GestdownClient.normalizeLanguageCode(searchLanguage)
+        searchLanguage = SubtitlePreferenceCatalog.language(id: language).id
+        prefs.preferences.preferredSubtitleLanguage = searchLanguage
+
         do {
-            let client = OpenSubtitlesClient(apiKey: prefs.preferences.openSubtitlesAPIKey)
-            let url = try await client.download(result)
-            session.loadExternalSubtitle(url: url)
-            downloadMessage = "Loaded \(result.fileName)"
+            let client = GestdownClient()
+            results = try await client.search(
+                showTitle: episode.showTitle,
+                season: episode.season,
+                episode: episode.episode,
+                language: language
+            )
+            downloadMessage = "\(results.count) subtitle\(results.count == 1 ? "" : "s") found — tap to save & load."
+        } catch {
+            downloadMessage = error.localizedDescription
+        }
+    }
+
+    private func downloadAndLoad(_ result: OnlineSubtitleResult) async {
+        isDownloading = true
+        downloadingResultID = result.id
+        downloadMessage = nil
+        defer {
+            isDownloading = false
+            downloadingResultID = nil
+        }
+
+        do {
+            let client = GestdownClient()
+            let downloaded = try await client.download(result)
+            let loadURL: URL
+            var remember = true
+            if let mediaURL = session.currentItem?.url, mediaURL.isFileURL {
+                do {
+                    loadURL = try GestdownClient.installSidecar(
+                        downloadedURL: downloaded,
+                        nextTo: mediaURL,
+                        languageCode: result.languageCode,
+                        version: result.version
+                    )
+                    session.grantFileAccess(to: loadURL)
+                    // Sidecar next to the video is auto-discovered — don't also pin it in "Saved".
+                    remember = false
+                    downloadMessage = "Saved \(loadURL.lastPathComponent) next to the video."
+                } catch {
+                    loadURL = downloaded
+                    downloadMessage = "Loaded \(result.displayName). Couldn’t write next to the video — kept in app cache."
+                }
+            } else {
+                loadURL = downloaded
+                downloadMessage = "Loaded \(result.displayName)."
+            }
+            session.loadExternalSubtitle(url: loadURL, remember: remember)
             refreshLocalMatches()
+            session.refreshRememberedSubtitles()
         } catch {
             downloadMessage = error.localizedDescription
         }

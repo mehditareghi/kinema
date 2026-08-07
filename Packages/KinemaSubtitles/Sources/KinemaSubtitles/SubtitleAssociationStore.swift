@@ -45,7 +45,12 @@ public enum SubtitleAssociationStore {
         for mediaURL: URL,
         subtitleURL: URL,
         encodingID: String
-    ) -> ManualSubtitleAssociation {
+    ) -> ManualSubtitleAssociation? {
+        // Sidecars are rediscovered via mpv sub-auto / local matching — don't pin them twice.
+        if SubtitleFileMatcher.isAssociatedSidecar(subtitleURL, of: mediaURL) {
+            return nil
+        }
+
         let mediaID = PlaybackHistoryEntry.mediaID(for: mediaURL)
         var all = loadAll()
         var items = all[mediaID] ?? []
@@ -75,6 +80,22 @@ public enum SubtitleAssociationStore {
         all[mediaID] = items
         save(all)
         return item
+    }
+
+    /// Drops remembered entries that are already ordinary sidecars for this media.
+    public static func pruneSidecarAssociations(for mediaURL: URL) {
+        let mediaID = PlaybackHistoryEntry.mediaID(for: mediaURL)
+        var all = loadAll()
+        guard var items = all[mediaID], !items.isEmpty else { return }
+        let before = items.count
+        items.removeAll { SubtitleFileMatcher.isAssociatedSidecar($0.fileURL, of: mediaURL) }
+        guard items.count != before else { return }
+        if items.isEmpty {
+            all.removeValue(forKey: mediaID)
+        } else {
+            all[mediaID] = items
+        }
+        save(all)
     }
 
     public static func updateDelay(for mediaURL: URL, associationID: String, delay: Double) {

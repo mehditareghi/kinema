@@ -26,6 +26,23 @@ public enum SubtitleFileMatcher {
         extensions.contains(url.pathExtension.lowercased())
     }
 
+    /// True when `subtitleURL` sits next to `mediaURL` with a sidecar-style name
+    /// (`Video.srt`, `Video.en.srt`, `Video_en.srt`).
+    public static func isAssociatedSidecar(_ subtitleURL: URL, of mediaURL: URL) -> Bool {
+        guard mediaURL.isFileURL, subtitleURL.isFileURL else { return false }
+        guard isSubtitleURL(subtitleURL) else { return false }
+
+        let mediaDir = mediaURL.deletingLastPathComponent().standardizedFileURL
+        let subDir = subtitleURL.deletingLastPathComponent().standardizedFileURL
+        guard mediaDir == subDir else { return false }
+
+        let baseName = mediaURL.deletingPathExtension().lastPathComponent
+        let name = subtitleURL.deletingPathExtension().lastPathComponent
+        return name == baseName
+            || name.hasPrefix(baseName + ".")
+            || name.hasPrefix(baseName + "_")
+    }
+
     public static func findLocalSubtitles(for mediaURL: URL) -> [SubtitleMatch] {
         let directory = mediaURL.deletingLastPathComponent()
         let baseName = mediaURL.deletingPathExtension().lastPathComponent
@@ -124,224 +141,386 @@ public enum SubtitleLabels {
     }
 }
 
-public struct OpenSubtitlesResult: Codable, Sendable, Identifiable {
-    public var id: String { fileID }
-    public let fileID: String
-    public let fileName: String
-    public let language: String
-    public let downloadURL: String?
+public struct OnlineSubtitleResult: Sendable, Identifiable {
+    public let id: String
+    public let displayName: String
+    public let languageCode: String
+    public let languageLabel: String
+    public let version: String
+    public let source: String
+    public let hearingImpaired: Bool
+    public let isHD: Bool
+    public let downloadCount: Int
+    public let episodeTitle: String?
 
-    enum CodingKeys: String, CodingKey {
-        case fileID = "file_id"
-        case fileName = "file_name"
-        case language
-        case downloadURL = "url"
-        case attributes
-        case files
-        case id
+    public init(
+        id: String,
+        displayName: String,
+        languageCode: String,
+        languageLabel: String,
+        version: String,
+        source: String,
+        hearingImpaired: Bool,
+        isHD: Bool,
+        downloadCount: Int,
+        episodeTitle: String? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.languageCode = languageCode
+        self.languageLabel = languageLabel
+        self.version = version
+        self.source = source
+        self.hearingImpaired = hearingImpaired
+        self.isHD = isHD
+        self.downloadCount = downloadCount
+        self.episodeTitle = episodeTitle
     }
 
-    public init(fileID: String, fileName: String, language: String, downloadURL: String? = nil) {
-        self.fileID = fileID
-        self.fileName = fileName
-        self.language = language
-        self.downloadURL = downloadURL
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let fileID = try container.decodeIfPresent(String.self, forKey: .fileID) {
-            self.fileID = fileID
-            self.fileName = try container.decodeIfPresent(String.self, forKey: .fileName) ?? "subtitle.srt"
-            self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? "en"
-            self.downloadURL = try container.decodeIfPresent(String.self, forKey: .downloadURL)
-            return
-        }
-
-        // OpenSubtitles.com API v1 nested attributes shape (best-effort).
-        if let id = try container.decodeIfPresent(Int.self, forKey: .id) {
-            self.fileID = "\(id)"
-        } else {
-            self.fileID = UUID().uuidString
-        }
-        self.fileName = try container.decodeIfPresent(String.self, forKey: .fileName) ?? "subtitle.srt"
-        self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? "en"
-        self.downloadURL = try container.decodeIfPresent(String.self, forKey: .downloadURL)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(fileID, forKey: .fileID)
-        try container.encode(fileName, forKey: .fileName)
-        try container.encode(language, forKey: .language)
-        try container.encodeIfPresent(downloadURL, forKey: .downloadURL)
+    public var detailLine: String {
+        var parts = [languageLabel, version, source]
+        if isHD { parts.append("HD") }
+        if hearingImpaired { parts.append("SDH") }
+        if downloadCount > 0 { parts.append("\(downloadCount) downloads") }
+        return parts.joined(separator: " · ")
     }
 }
 
-public enum OpenSubtitlesError: Error, LocalizedError {
-    case missingAPIKey
+public enum OnlineSubtitleError: Error, LocalizedError {
+    case invalidQuery
+    case showNotFound(String)
+    case noResults
+    case temporarilyUnavailable
+    case rateLimited
     case invalidResponse
     case downloadFailed(String)
+    case sidecarWriteFailed(String)
 
     public var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "Add an OpenSubtitles API key in Preferences to download subtitles."
+        case .invalidQuery:
+            return "Could not detect a TV episode from this filename."
+        case .showNotFound(let name):
+            return "No show matched “\(name)”."
+        case .noResults:
+            return "No subtitles found for this episode and language."
+        case .temporarilyUnavailable:
+            return "Subtitle catalog is refreshing. Try again in a moment."
+        case .rateLimited:
+            return "Too many requests. Wait a bit and try again."
         case .invalidResponse:
-            return "OpenSubtitles returned an unexpected response."
+            return "Subtitle service returned an unexpected response."
         case .downloadFailed(let message):
+            return message
+        case .sidecarWriteFailed(let message):
             return message
         }
     }
 }
 
-public actor OpenSubtitlesClient {
-    private let apiKey: String?
+/// Keyless TV subtitle search/download via Gestdown (Addic7ed-style).
+public actor GestdownClient {
     private let session: URLSession
+    private let baseURL = URL(string: "https://api.gestdown.info")!
+    private let userAgent = "Kinema/1.0"
 
-    public init(apiKey: String? = nil, session: URLSession = .shared) {
-        self.apiKey = apiKey
+    public init(session: URLSession = .shared) {
         self.session = session
     }
 
-    public func search(query: String, language: String = "en") async throws -> [OpenSubtitlesResult] {
-        if let apiKey, !apiKey.isEmpty {
-            if let modern = try? await searchModern(query: query, language: language, apiKey: apiKey), !modern.isEmpty {
-                return modern
-            }
+    public func search(
+        showTitle: String,
+        season: Int,
+        episode: Int,
+        language: String
+    ) async throws -> [OnlineSubtitleResult] {
+        let languageCode = Self.normalizeLanguageCode(language)
+        guard languageCode.count >= 2 else { throw OnlineSubtitleError.invalidQuery }
+
+        let show = try await resolveShow(named: showTitle, season: season)
+        let url = baseURL
+            .appendingPathComponent("subtitles")
+            .appendingPathComponent("get")
+            .appendingPathComponent(show.id)
+            .appendingPathComponent("\(season)")
+            .appendingPathComponent("\(episode)")
+            .appendingPathComponent(languageCode)
+        let (data, response) = try await get(url: url)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw OnlineSubtitleError.invalidResponse
         }
-        return try await searchLegacy(query: query, language: language)
+        switch http.statusCode {
+        case 200:
+            break
+        case 404:
+            throw OnlineSubtitleError.noResults
+        case 423:
+            throw OnlineSubtitleError.temporarilyUnavailable
+        case 429:
+            throw OnlineSubtitleError.rateLimited
+        default:
+            throw OnlineSubtitleError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(SubtitleSearchResponse.self, from: data)
+        let episodeTitle = decoded.episode?.title
+        let results = (decoded.matchingSubtitles ?? []).map { item in
+            let version = item.version.isEmpty ? "Default" : item.version
+            let display = [show.name, String(format: "S%02dE%02d", season, episode), version]
+                .joined(separator: " · ")
+            return OnlineSubtitleResult(
+                id: item.subtitleId,
+                displayName: display,
+                languageCode: languageCode,
+                languageLabel: item.language.isEmpty ? languageCode.uppercased() : item.language,
+                version: version,
+                source: item.source.isEmpty ? "Gestdown" : item.source,
+                hearingImpaired: item.hearingImpaired,
+                isHD: item.hd,
+                downloadCount: item.downloadCount,
+                episodeTitle: episodeTitle
+            )
+        }
+        if results.isEmpty {
+            throw OnlineSubtitleError.noResults
+        }
+        return results
     }
 
-    public func download(_ result: OpenSubtitlesResult) async throws -> URL {
-        if let direct = result.downloadURL, let url = URL(string: direct) {
-            return try await downloadFile(from: url, suggestedName: result.fileName)
-        }
+    public func download(_ result: OnlineSubtitleResult) async throws -> URL {
+        let url = baseURL
+            .appendingPathComponent("subtitles")
+            .appendingPathComponent("download")
+            .appendingPathComponent(result.id)
+        var request = URLRequest(url: url)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        guard let apiKey, !apiKey.isEmpty else {
-            throw OpenSubtitlesError.missingAPIKey
-        }
-
-        var request = URLRequest(url: URL(string: "https://api.opensubtitles.com/api/v1/download")!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Kinema v1.0", forHTTPHeaderField: "User-Agent")
-        request.setValue(apiKey, forHTTPHeaderField: "Api-Key")
-        let body: [String: Any] = ["file_id": Int(result.fileID) ?? result.fileID]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.download(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw OpenSubtitlesError.downloadFailed("Download request failed.")
+            throw OnlineSubtitleError.downloadFailed("Could not download subtitle file.")
         }
 
-        struct DownloadResponse: Decodable {
-            let link: String?
-            let file_name: String?
-        }
-        let decoded = try JSONDecoder().decode(DownloadResponse.self, from: data)
-        guard let link = decoded.link, let downloadURL = URL(string: link) else {
-            throw OpenSubtitlesError.invalidResponse
-        }
-        return try await downloadFile(from: downloadURL, suggestedName: decoded.file_name ?? result.fileName)
+        let suggested = suggestedFilename(from: response)
+            ?? "\(Self.sanitizeFilenameComponent(result.version)).\(result.languageCode).srt"
+        return try storeInCaches(tempURL: tempURL, suggestedName: suggested)
     }
 
-    private func searchLegacy(query: String, language: String) async throws -> [OpenSubtitlesResult] {
-        var components = URLComponents(string: "https://rest.opensubtitles.org/search/")!
-        components.queryItems = [
-            URLQueryItem(name: "query", value: query),
-            URLQueryItem(name: "sublanguageid", value: language)
-        ]
-        guard let url = components.url else { return [] }
-
-        var request = URLRequest(url: url)
-        request.setValue("Kinema v1.0", forHTTPHeaderField: "User-Agent")
-        if let apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "Api-Key")
+    /// Writes a downloaded subtitle next to the media file as `{stem}.{lang}.srt` when possible.
+    public nonisolated static func installSidecar(
+        downloadedURL: URL,
+        nextTo mediaURL: URL,
+        languageCode: String,
+        version: String
+    ) throws -> URL {
+        guard mediaURL.isFileURL else {
+            throw OnlineSubtitleError.sidecarWriteFailed("Online save needs a local video file.")
         }
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            return []
+        let directory = mediaURL.deletingLastPathComponent()
+        let stem = mediaURL.deletingPathExtension().lastPathComponent
+        let lang = Self.normalizeLanguageCode(languageCode)
+        let preferred = directory.appendingPathComponent("\(stem).\(lang).srt")
+        let destination: URL
+        if !FileManager.default.fileExists(atPath: preferred.path) {
+            destination = preferred
+        } else {
+            let tag = Self.sanitizeFilenameComponent(version)
+            destination = directory.appendingPathComponent("\(stem).\(lang).\(tag).srt")
         }
 
-        struct Wrapper: Codable {
-            let data: [OpenSubtitlesResult]
-        }
-        if let wrapped = try? JSONDecoder().decode(Wrapper.self, from: data) {
-            return wrapped.data
-        }
-        return (try? JSONDecoder().decode([OpenSubtitlesResult].self, from: data)) ?? []
-    }
-
-    private func searchModern(query: String, language: String, apiKey: String) async throws -> [OpenSubtitlesResult] {
-        var components = URLComponents(string: "https://api.opensubtitles.com/api/v1/subtitles")!
-        components.queryItems = [
-            URLQueryItem(name: "query", value: query),
-            URLQueryItem(name: "languages", value: language)
-        ]
-        guard let url = components.url else { return [] }
-
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Kinema v1.0", forHTTPHeaderField: "User-Agent")
-        request.setValue(apiKey, forHTTPHeaderField: "Api-Key")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            return []
-        }
-
-        struct ModernFile: Decodable {
-            let file_id: Int?
-            let file_name: String?
-        }
-        struct ModernAttributes: Decodable {
-            let language: String?
-            let files: [ModernFile]?
-            let feature_details: FeatureDetails?
-            struct FeatureDetails: Decodable {
-                let title: String?
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
             }
-        }
-        struct ModernItem: Decodable {
-            let id: String?
-            let attributes: ModernAttributes?
-        }
-        struct ModernWrapper: Decodable {
-            let data: [ModernItem]?
-        }
-
-        let wrapper = try JSONDecoder().decode(ModernWrapper.self, from: data)
-        return (wrapper.data ?? []).compactMap { item in
-            guard let file = item.attributes?.files?.first, let fileID = file.file_id else { return nil }
-            let name = file.file_name
-                ?? item.attributes?.feature_details?.title
-                ?? "subtitle-\(fileID).srt"
-            return OpenSubtitlesResult(
-                fileID: "\(fileID)",
-                fileName: name,
-                language: item.attributes?.language ?? language
+            try FileManager.default.copyItem(at: downloadedURL, to: destination)
+            return destination
+        } catch {
+            throw OnlineSubtitleError.sidecarWriteFailed(
+                "Could not save next to the video (\(error.localizedDescription))."
             )
         }
     }
 
-    private func downloadFile(from url: URL, suggestedName: String) async throws -> URL {
-        let (tempURL, response) = try await session.download(from: url)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw OpenSubtitlesError.downloadFailed("Could not download subtitle file.")
+    public nonisolated static func normalizeLanguageCode(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return "en" }
+        let primary = trimmed
+            .replacingOccurrences(of: "_", with: "-")
+            .split(separator: "-", maxSplits: 1, omittingEmptySubsequences: true)
+            .first
+            .map(String.init) ?? trimmed
+        if primary.count == 2 || primary.count == 3 { return primary }
+        // Best-effort for accidental full names typed in the field.
+        switch primary {
+        case "english": return "en"
+        case "french", "francais", "français": return "fr"
+        case "spanish", "espanol", "español": return "es"
+        case "german", "deutsch": return "de"
+        case "italian", "italiano": return "it"
+        case "portuguese", "portugues", "português": return "pt"
+        case "arabic": return "ar"
+        case "persian", "farsi": return "fa"
+        case "turkish": return "tr"
+        case "russian": return "ru"
+        case "chinese", "mandarin": return "zh"
+        case "japanese": return "ja"
+        case "korean": return "ko"
+        default:
+            return String(primary.prefix(2))
         }
+    }
+
+    private func resolveShow(named title: String, season: Int) async throws -> ShowDTO {
+        let query = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count >= 3 else { throw OnlineSubtitleError.invalidQuery }
+
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? query
+        guard let searchURL = URL(string: "https://api.gestdown.info/shows/search/\(encoded)") else {
+            throw OnlineSubtitleError.invalidQuery
+        }
+        let (data, response) = try await get(url: searchURL)
+        guard let http = response as? HTTPURLResponse else {
+            throw OnlineSubtitleError.invalidResponse
+        }
+        switch http.statusCode {
+        case 200:
+            break
+        case 404:
+            throw OnlineSubtitleError.showNotFound(query)
+        case 429:
+            throw OnlineSubtitleError.rateLimited
+        default:
+            throw OnlineSubtitleError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(ShowSearchResponse.self, from: data)
+        let shows = decoded.shows ?? []
+        guard !shows.isEmpty else { throw OnlineSubtitleError.showNotFound(query) }
+
+        return pickBestShow(from: shows, query: query, season: season)
+    }
+
+    /// Prefer exact title matches that include the requested season.
+    /// Gestdown often returns multiple same-named shows (e.g. two "The Boys").
+    private func pickBestShow(from shows: [ShowDTO], query: String, season: Int) -> ShowDTO {
+        let normalizedQuery = normalizeMatchKey(query)
+
+        func score(_ show: ShowDTO) -> (Int, Int, Int) {
+            let exactName = normalizeMatchKey(show.name) == normalizedQuery ? 1 : 0
+            let hasSeason: Int
+            if let seasons = show.seasons, !seasons.isEmpty {
+                hasSeason = seasons.contains(season) ? 1 : 0
+            } else if let count = show.nbSeasons {
+                hasSeason = count >= season ? 1 : 0
+            } else {
+                hasSeason = 0
+            }
+            // Prefer richer/more recent catalogs when titles collide.
+            let richness = show.nbSeasons ?? show.seasons?.count ?? 0
+            return (exactName, hasSeason, richness)
+        }
+
+        return shows.max { lhs, rhs in
+            let left = score(lhs)
+            let right = score(rhs)
+            if left.0 != right.0 { return left.0 < right.0 }
+            if left.1 != right.1 { return left.1 < right.1 }
+            return left.2 < right.2
+        } ?? shows[0]
+    }
+
+    private func get(url: URL) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return try await session.data(for: request)
+    }
+
+    private func storeInCaches(tempURL: URL, suggestedName: String) throws -> URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let folder = caches.appendingPathComponent("KinemaSubtitles", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let safeName = suggestedName.isEmpty ? "download.srt" : suggestedName
+        let safeName = suggestedName.isEmpty ? "download.srt" : Self.sanitizeFilenameComponent(suggestedName)
         let destination = folder.appendingPathComponent(safeName)
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.moveItem(at: tempURL, to: destination)
         return destination
+    }
+
+    private func suggestedFilename(from response: URLResponse) -> String? {
+        guard let http = response as? HTTPURLResponse,
+              let disposition = http.value(forHTTPHeaderField: "Content-Disposition") else {
+            return nil
+        }
+        // filename="…" or filename*=UTF-8''…
+        if let starRange = disposition.range(of: "filename*="),
+           let value = disposition[starRange.upperBound...].split(separator: ";").first {
+            var raw = String(value).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let encoded = raw.split(separator: "'", maxSplits: 2, omittingEmptySubsequences: false).last {
+                raw = String(encoded)
+            }
+            raw = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            if let decoded = raw.removingPercentEncoding, !decoded.isEmpty {
+                return decoded
+            }
+        }
+        if let range = disposition.range(of: "filename=") {
+            var raw = String(disposition[range.upperBound...].split(separator: ";").first ?? "")
+            raw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            raw = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            return raw.isEmpty ? nil : raw
+        }
+        return nil
+    }
+
+    private nonisolated static func sanitizeFilenameComponent(_ value: String) -> String {
+        let illegal = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+        let cleaned = value
+            .components(separatedBy: illegal)
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "subtitle" : cleaned
+    }
+
+    private func normalizeMatchKey(_ value: String) -> String {
+        value.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private struct ShowSearchResponse: Decodable {
+        let shows: [ShowDTO]?
+    }
+
+    private struct ShowDTO: Decodable {
+        let id: String
+        let name: String
+        let nbSeasons: Int?
+        let seasons: [Int]?
+        let tmdbId: Int?
+        let tvDbId: Int?
+    }
+
+    private struct SubtitleSearchResponse: Decodable {
+        let matchingSubtitles: [SubtitleDTO]?
+        let episode: EpisodeDTO?
+    }
+
+    private struct EpisodeDTO: Decodable {
+        let title: String?
+    }
+
+    private struct SubtitleDTO: Decodable {
+        let subtitleId: String
+        let version: String
+        let hearingImpaired: Bool
+        let hd: Bool
+        let language: String
+        let downloadCount: Int
+        let source: String
     }
 }
 

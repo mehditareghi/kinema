@@ -9,6 +9,7 @@ public struct LibraryBrowserView: View {
     @Bindable private var browse: LibraryBrowseState
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var items: [LibraryItem] = []
+    @State private var organizedContent: SeriesBrowseContent = .empty
     @State private var showFolderPicker = false
     @State private var removeRootTarget: LibraryRoot?
     @State private var renameTarget: LibraryItem?
@@ -25,18 +26,13 @@ public struct LibraryBrowserView: View {
     @State private var newFolderName = ""
     @State private var isReloading = false
     @State private var pendingReloadTask: Task<Void, Never>?
+    @State private var listingTask: Task<Void, Never>?
+    @State private var listingGeneration = 0
     /// Path of the directory whose listing currently backs `items` (nil = not listed yet).
     @State private var listedDirectoryPath: String?
 
     private var accent: Color { KinemaTheme.accent }
     private var rootStore: LibraryRootStore { browse.rootStore }
-
-    private var organizedContent: SeriesBrowseContent {
-        MediaSeriesOrganizer.organize(
-            videoURLs: items.filter { !$0.isDirectory }.map(\.url),
-            virtualPath: browse.virtualPath
-        )
-    }
 
     private var realFolders: [LibraryItem] {
         guard browse.virtualPath.isEmpty else { return [] }
@@ -156,6 +152,8 @@ public struct LibraryBrowserView: View {
         .onDisappear {
             pendingReloadTask?.cancel()
             pendingReloadTask = nil
+            listingTask?.cancel()
+            listingTask = nil
             if let progressToken {
                 EventBus.shared.unsubscribe(progressToken)
             }
@@ -173,7 +171,9 @@ public struct LibraryBrowserView: View {
             reloadIfNeeded()
         }
         .onChange(of: browse.virtualPath) { _, _ in
-            ThumbnailPrefetcher.schedule(displayedVideos.map(\.url))
+            recomputeOrganizedContent()
+            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(32).map(\.url)))
+            refreshWatchedBadgesAfterListing()
         }
         .alert(KinemaCopy.rename, isPresented: Binding(
             get: { renameTarget != nil || renameRootTarget != nil },
@@ -341,7 +341,7 @@ public struct LibraryBrowserView: View {
                                 accent: accent,
                                 systemImage: "rectangle.stack.fill",
                                 subtitle: KinemaCopy.spotlightBadge,
-                                isFullyWatched: WatchProgressStore.areAllWatched(folder.videoURLs)
+                                isFullyWatched: isVirtualFolderFullyWatched(folder)
                             )
                         }
                         .buttonStyle(.plain)
@@ -688,6 +688,14 @@ public struct LibraryBrowserView: View {
         return fullyWatchedFolderPaths.contains(url.standardizedFileURL.path)
     }
 
+    private func isVirtualFolderFullyWatched(_ folder: VirtualSeriesFolder) -> Bool {
+        fullyWatchedFolderPaths.contains(Self.virtualWatchedKey(folder.id))
+    }
+
+    private static func virtualWatchedKey(_ folderID: String) -> String {
+        "virtual:\(folderID)"
+    }
+
     private func filterBySearch(_ values: [LibraryItem]) -> [LibraryItem] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return values }
@@ -701,6 +709,8 @@ public struct LibraryBrowserView: View {
         isReloading = false
         pendingReloadTask?.cancel()
         pendingReloadTask = nil
+        listingTask?.cancel()
+        listingTask = nil
         LibraryDirectoryWatcher.shared.suppressEvents(for: 1.0)
         reloadIfNeeded()
         #if os(iOS) || os(macOS)
@@ -721,11 +731,14 @@ public struct LibraryBrowserView: View {
     }
 
     private func reloadIfNeeded() {
-        guard !isReloading else { return }
         if browse.isAtLibraryHome {
+            listingTask?.cancel()
             listedDirectoryPath = nil
             if !items.isEmpty {
                 items = []
+            }
+            if !organizedContent.virtualFolders.isEmpty || !organizedContent.videoURLs.isEmpty {
+                organizedContent = .empty
             }
             if !fullyWatchedFolderPaths.isEmpty {
                 fullyWatchedFolderPaths = []
@@ -733,13 +746,15 @@ public struct LibraryBrowserView: View {
             return
         }
         guard let directory = browse.currentDirectory ?? browse.libraryRootURL else {
+            listingTask?.cancel()
             listedDirectoryPath = nil
             if !items.isEmpty { items = [] }
+            if !organizedContent.virtualFolders.isEmpty || !organizedContent.videoURLs.isEmpty {
+                organizedContent = .empty
+            }
             if !fullyWatchedFolderPaths.isEmpty { fullyWatchedFolderPaths = [] }
             return
         }
-        // Navigating to a new folder — don't keep the previous listing path or empty
-        // state will flash before the new listing finishes.
         let path = directory.standardizedFileURL.path
         if listedDirectoryPath != path {
             listedDirectoryPath = nil
@@ -748,77 +763,129 @@ public struct LibraryBrowserView: View {
     }
 
     private func reload(directory: URL) {
+        listingTask?.cancel()
+        listingGeneration += 1
+        let generation = listingGeneration
+        let path = directory.standardizedFileURL.path
+
         isReloading = true
         LibraryDirectoryWatcher.shared.suppressEvents(for: 1.0)
-        defer { isReloading = false }
 
+        listingTask = Task { @MainActor in
+            let rawItems = await Task.detached(priority: .userInitiated) {
+                Self.scanDirectory(directory)
+            }.value
+
+            guard !Task.isCancelled, generation == listingGeneration else { return }
+            let stillHere = browse.currentDirectory?.standardizedFileURL.path == path
+                || (browse.currentDirectory == nil && browse.libraryRootURL?.standardizedFileURL.path == path)
+            guard stillHere else { return }
+
+            let listed = rawItems.map { raw in
+                LibraryItem(
+                    url: raw.url,
+                    isDirectory: raw.isDirectory,
+                    progress: raw.isDirectory ? nil : WatchProgressStore.entry(for: raw.url)
+                )
+            }
+            items = listed
+            recomputeOrganizedContent()
+            listedDirectoryPath = path
+            isReloading = false
+
+            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(32).map(\.url)))
+            refreshWatchedBadgesAfterListing(generation: generation)
+        }
+    }
+
+    private func recomputeOrganizedContent() {
+        organizedContent = MediaSeriesOrganizer.organize(
+            videoURLs: items.filter { !$0.isDirectory }.map(\.url),
+            virtualPath: browse.virtualPath
+        )
+    }
+
+    private func refreshWatchedBadgesAfterListing(generation: Int? = nil) {
+        let expectedGeneration = generation ?? listingGeneration
+        let folderURLs = items.filter(\.isDirectory).map(\.url)
+        let virtuals = organizedContent.virtualFolders.map { ($0.id, $0.videoURLs) }
+
+        Task(priority: .utility) { @MainActor in
+            let shallowVideos = await Task.detached(priority: .utility) {
+                folderURLs.map { folder -> (String, [URL]) in
+                    let videos = Self.shallowMediaURLs(in: folder)
+                    return (folder.standardizedFileURL.path, videos)
+                }
+            }.value
+
+            guard !Task.isCancelled, expectedGeneration == listingGeneration else { return }
+
+            var watched = Set<String>()
+            for (path, videos) in shallowVideos {
+                if WatchProgressStore.areAllWatched(videos) {
+                    watched.insert(path)
+                }
+            }
+            for (folderID, videoURLs) in virtuals {
+                if WatchProgressStore.areAllWatched(videoURLs) {
+                    watched.insert(Self.virtualWatchedKey(folderID))
+                }
+            }
+            fullyWatchedFolderPaths = watched
+        }
+    }
+
+    private struct ScannedLibraryEntry: Sendable {
+        let url: URL
+        let isDirectory: Bool
+    }
+
+    /// Filesystem scan off the main actor — progress is attached afterward.
+    private static func scanDirectory(_ directory: URL) -> [ScannedLibraryEntry] {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey, .nameKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .nameKey, .isRegularFileKey, .fileSizeKey],
             options: [.skipsHiddenFiles]
         )) ?? []
 
-        items = urls
-            .filter { MediaFileTypes.isBrowsable($0) }
-            .sorted(by: Self.compareLibraryURLs)
-            .map { url in
-                let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-                let progress = isDir ? nil : WatchProgressStore.entry(for: url)
-                return LibraryItem(url: url, isDirectory: isDir, progress: progress)
+        var entries: [ScannedLibraryEntry] = []
+        entries.reserveCapacity(urls.count)
+
+        for url in urls {
+            if LibraryMediaPaths.isIgnoredName(url.lastPathComponent) { continue }
+            let values = try? url.resourceValues(forKeys: [
+                .isDirectoryKey, .isRegularFileKey, .fileSizeKey
+            ])
+            let isDirectory = values?.isDirectory ?? false
+            if isDirectory {
+                entries.append(ScannedLibraryEntry(url: url, isDirectory: true))
+                continue
             }
-
-        listedDirectoryPath = directory.standardizedFileURL.path
-
-        refreshFullyWatchedFolders(
-            directoryFolders: items.filter(\.isDirectory).map(\.url),
-            includeRoots: false,
-            shallow: true
-        )
-        ThumbnailPrefetcher.schedule(displayedVideos.map(\.url))
-    }
-
-    /// Folders first, then A→Z with Finder-style numeric sorting.
-    private static func compareLibraryURLs(_ lhs: URL, _ rhs: URL) -> Bool {
-        let lDir = (try? lhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-        let rDir = (try? rhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-        if lDir != rDir { return lDir && !rDir }
-        return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
-    }
-
-    private func refreshFullyWatchedFolders(
-        directoryFolders: [URL],
-        includeRoots: Bool,
-        shallow: Bool = false
-    ) {
-        var watched = Set<String>()
-
-        for folder in directoryFolders {
-            let videos: [URL]
-            if shallow {
-                videos = (try? FileManager.default.contentsOfDirectory(
-                    at: folder,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles]
-                ))?.filter { MediaFileTypes.isMediaFile($0) } ?? []
-            } else {
-                videos = WatchProgressStore.mediaURLs(under: folder)
+            guard MediaFileTypes.isMediaFile(url) else { continue }
+            guard values?.isRegularFile == true,
+                  let size = values?.fileSize,
+                  size >= 4_096 else { continue }
+            let lower = url.lastPathComponent.lowercased()
+            if LibraryMediaPaths.incompleteNameSuffixes.contains(where: { lower.hasSuffix($0) }) {
+                continue
             }
-            if WatchProgressStore.areAllWatched(videos) {
-                watched.insert(folder.standardizedFileURL.path)
-            }
+            entries.append(ScannedLibraryEntry(url: url, isDirectory: false))
         }
 
-        if includeRoots {
-            for root in rootStore.roots {
-                guard let url = rootStore.resolveURL(for: root) else { continue }
-                let videos = WatchProgressStore.mediaURLs(under: url)
-                if WatchProgressStore.areAllWatched(videos) {
-                    watched.insert(url.standardizedFileURL.path)
-                }
-            }
+        entries.sort { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory && !rhs.isDirectory }
+            return lhs.url.lastPathComponent.localizedStandardCompare(rhs.url.lastPathComponent) == .orderedAscending
         }
+        return entries
+    }
 
-        fullyWatchedFolderPaths = watched
+    private static func shallowMediaURLs(in folder: URL) -> [URL] {
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return urls.filter { MediaFileTypes.isMediaFile($0) }
     }
 
     private func open(_ item: LibraryItem) {

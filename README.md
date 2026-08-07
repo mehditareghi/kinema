@@ -8,7 +8,7 @@
 
 - Broad format support via libmpv / FFmpeg (H.264, H.265, AV1, VP9, MKV, and more)
 - Unified SwiftUI interface across Apple platforms
-- Subtitles: auto-match, manual load, OpenSubtitles search, styling
+- Subtitles: auto-match, manual load, Gestdown online TV search, styling
 - Playlists, chapters, A/V track selection
 - Playback history with resume (SwiftData)
 - Picture-in-Picture (iOS / macOS)
@@ -67,7 +67,7 @@ UI (SwiftUI) → PlayerSession → MPVController → libmpv
 | `KinemaMPV` | libmpv integration and render backends |
 | `KinemaPlayback` | `PlaybackEngine` protocol and session management |
 | `KinemaUI` | SwiftUI player views and controls |
-| `KinemaSubtitles` | Subtitle matching and OpenSubtitles API |
+| `KinemaSubtitles` | Subtitle matching and Gestdown online search |
 | `KinemaMedia` | URL resolution (yt-dlp on macOS) |
 | `KinemaPlugins` | Swift plugin SDK (stub) |
 

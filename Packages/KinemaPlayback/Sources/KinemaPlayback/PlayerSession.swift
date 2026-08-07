@@ -44,6 +44,17 @@ public final class PlayerSession: PlaybackEngine {
         subtitleTracks.filter { $0.isExternal }
     }
 
+    /// Absolute paths of external subtitle files currently attached to the player.
+    public var loadedExternalSubtitlePaths: Set<String> {
+        var paths = Set(externalSourceByTrackID.values.map { $0.standardizedFileURL.path })
+        for track in externalSubtitleTracks {
+            if let filename = track.externalFilename, !filename.isEmpty {
+                paths.insert(URL(fileURLWithPath: filename).standardizedFileURL.path)
+            }
+        }
+        return paths
+    }
+
     public var subtitlesAreActive: Bool {
         activeSubtitleTrackID != nil
     }
@@ -497,6 +508,17 @@ public final class PlayerSession: PlaybackEngine {
         if let encodingID {
             setSubtitleEncoding(encodingID)
         }
+        if isExternalSubtitleAlreadyLoaded(url) {
+            if remember, let media = currentItem?.url {
+                _ = SubtitleAssociationStore.add(
+                    for: media,
+                    subtitleURL: url,
+                    encodingID: encodingID ?? PreferencesStore.shared.preferences.subtitleEncodingID
+                )
+                refreshRememberedSubtitles()
+            }
+            return
+        }
         pendingExternalSourceURL = url
         controller.addSubtitle(url: url)
         if remember, let media = currentItem?.url {
@@ -546,7 +568,19 @@ public final class PlayerSession: PlaybackEngine {
             rememberedSubtitles = []
             return
         }
+        SubtitleAssociationStore.pruneSidecarAssociations(for: media)
         rememberedSubtitles = SubtitleAssociationStore.associations(for: media)
+    }
+
+    private func isExternalSubtitleAlreadyLoaded(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        if externalSourceByTrackID.values.contains(where: { $0.standardizedFileURL.path == path }) {
+            return true
+        }
+        return subtitleTracks.contains { track in
+            guard track.isExternal, let external = track.externalFilename else { return false }
+            return URL(fileURLWithPath: external).standardizedFileURL.path == path
+        }
     }
 
     private func applyStoredDelayIfNeeded(for url: URL) {
@@ -987,11 +1021,13 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     private func restoreRememberedSubtitlesOnly(for item: MediaItem) async {
+        SubtitleAssociationStore.pruneSidecarAssociations(for: item.url)
         let associations = SubtitleAssociationStore.associations(for: item.url)
         rememberedSubtitles = associations
+        refreshTracks(force: true)
         for association in associations {
             guard let url = SubtitleAssociationStore.resolveURL(association) else { continue }
-            if externalSourceByTrackID.values.contains(where: { $0.path == url.path }) { continue }
+            if isExternalSubtitleAlreadyLoaded(url) { continue }
             grantFileAccess(to: url)
             pendingExternalSourceURL = url
             if association.encodingID != PreferencesStore.shared.preferences.subtitleEncodingID {

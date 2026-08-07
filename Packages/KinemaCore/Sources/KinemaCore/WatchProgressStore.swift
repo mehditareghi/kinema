@@ -35,6 +35,8 @@ public struct WatchProgressEntry: Codable, Identifiable, Sendable, Equatable {
 public enum WatchProgressStore {
     private static let fileName = "watch-progress.json"
     private static var didMigrateStableIDs = false
+    private static var memoryCache: [WatchProgressEntry]?
+    private static var memoryIndex: [String: WatchProgressEntry]?
 
     public static func mediaID(for url: URL) -> String {
         PlaybackHistoryEntry.mediaID(for: url)
@@ -75,16 +77,15 @@ public enum WatchProgressStore {
     }
 
     public static func resumePosition(for url: URL) -> TimeInterval? {
-        let id = mediaID(for: url)
-        guard let entry = loadAll().first(where: { $0.mediaID == id }) else { return nil }
+        guard let entry = entry(for: url) else { return nil }
         guard entry.duration > 0, !entry.isMostlyFinished else { return nil }
         guard entry.lastPosition > 5 else { return nil }
         return entry.lastPosition
     }
 
     public static func entry(for url: URL) -> WatchProgressEntry? {
-        let id = mediaID(for: url)
-        return loadAll().first { $0.mediaID == id }
+        _ = loadAll()
+        return memoryIndex?[mediaID(for: url)]
     }
 
     @discardableResult
@@ -258,9 +259,13 @@ public enum WatchProgressStore {
     }
 
     private static func loadAll() -> [WatchProgressEntry] {
+        if let memoryCache {
+            return memoryCache
+        }
         let url = storeURL()
         guard let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode([WatchProgressEntry].self, from: data) else {
+            installCache([])
             return []
         }
         let migrated = migrateStableMediaIDs(decoded)
@@ -268,8 +273,10 @@ public enum WatchProgressStore {
             didMigrateStableIDs = true
             if migrated != decoded {
                 save(migrated)
+                return memoryCache ?? migrated
             }
         }
+        installCache(migrated)
         return migrated
     }
 
@@ -310,7 +317,13 @@ public enum WatchProgressStore {
         return migrated
     }
 
+    private static func installCache(_ entries: [WatchProgressEntry]) {
+        memoryCache = entries
+        memoryIndex = Dictionary(uniqueKeysWithValues: entries.map { ($0.mediaID, $0) })
+    }
+
     private static func save(_ entries: [WatchProgressEntry]) {
+        installCache(entries)
         let url = storeURL()
         guard let data = try? JSONEncoder().encode(entries) else { return }
         try? data.write(to: url, options: .atomic)

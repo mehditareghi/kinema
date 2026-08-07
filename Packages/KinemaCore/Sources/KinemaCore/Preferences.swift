@@ -23,6 +23,16 @@ public struct SubtitleEncodingOption: Identifiable, Hashable, Sendable {
     }
 }
 
+public struct SubtitleLanguageOption: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let displayName: String
+
+    public init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+    }
+}
+
 public enum SubtitlePreferenceCatalog {
     public static let defaultFontID = SubtitleFontRegistry.systemDefaultID
     public static let defaultColorHex = "#FFFFFFFF"
@@ -30,6 +40,35 @@ public enum SubtitlePreferenceCatalog {
     public static let defaultBorderColorHex = "#FF000000"
     public static let defaultShadowColorHex = "#80000000"
     public static let defaultBackColorHex = "#00000000"
+
+    public static let popularLanguages: [SubtitleLanguageOption] = [
+        SubtitleLanguageOption(id: "en", displayName: "English"),
+        SubtitleLanguageOption(id: "fa", displayName: "Persian (Farsi)"),
+        SubtitleLanguageOption(id: "ar", displayName: "Arabic"),
+        SubtitleLanguageOption(id: "es", displayName: "Spanish"),
+        SubtitleLanguageOption(id: "fr", displayName: "French"),
+        SubtitleLanguageOption(id: "de", displayName: "German"),
+        SubtitleLanguageOption(id: "it", displayName: "Italian"),
+        SubtitleLanguageOption(id: "pt", displayName: "Portuguese"),
+        SubtitleLanguageOption(id: "tr", displayName: "Turkish"),
+        SubtitleLanguageOption(id: "ru", displayName: "Russian"),
+        SubtitleLanguageOption(id: "zh", displayName: "Chinese"),
+        SubtitleLanguageOption(id: "ja", displayName: "Japanese"),
+        SubtitleLanguageOption(id: "ko", displayName: "Korean"),
+        SubtitleLanguageOption(id: "hi", displayName: "Hindi"),
+        SubtitleLanguageOption(id: "nl", displayName: "Dutch"),
+        SubtitleLanguageOption(id: "pl", displayName: "Polish"),
+        SubtitleLanguageOption(id: "sv", displayName: "Swedish")
+    ]
+
+    public static func language(id: String) -> SubtitleLanguageOption {
+        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let match = popularLanguages.first(where: { $0.id == normalized }) {
+            return match
+        }
+        let code = normalized.isEmpty ? "en" : normalized
+        return SubtitleLanguageOption(id: code, displayName: code.uppercased())
+    }
 
     public static let encodings: [SubtitleEncodingOption] = [
         SubtitleEncodingOption(id: "utf-8", displayName: "UTF-8"),
@@ -89,7 +128,6 @@ public struct KinemaPreferences: Sendable {
     public var preferredSubtitleLanguage: String
     public var preferSDHSubtitles: Bool
     public var forcedSubtitlesOnly: Bool
-    public var openSubtitlesAPIKey: String
     public var wifiSharingEnabled: Bool
     public var wifiSharingPasscode: String
     public var wifiSharingPreferIPv6: Bool
@@ -122,7 +160,6 @@ public struct KinemaPreferences: Sendable {
         preferredSubtitleLanguage: String = "en",
         preferSDHSubtitles: Bool = false,
         forcedSubtitlesOnly: Bool = false,
-        openSubtitlesAPIKey: String = "",
         wifiSharingEnabled: Bool = false,
         wifiSharingPasscode: String = "",
         wifiSharingPreferIPv6: Bool = true
@@ -154,7 +191,6 @@ public struct KinemaPreferences: Sendable {
         self.preferredSubtitleLanguage = preferredSubtitleLanguage
         self.preferSDHSubtitles = preferSDHSubtitles
         self.forcedSubtitlesOnly = forcedSubtitlesOnly
-        self.openSubtitlesAPIKey = openSubtitlesAPIKey
         self.wifiSharingEnabled = wifiSharingEnabled
         self.wifiSharingPasscode = wifiSharingPasscode
         self.wifiSharingPreferIPv6 = wifiSharingPreferIPv6
@@ -195,7 +231,6 @@ public final class PreferencesStore {
         static let preferredSubtitleLanguage = "kinema.preferredSubtitleLanguage"
         static let preferSDHSubtitles = "kinema.preferSDHSubtitles"
         static let forcedSubtitlesOnly = "kinema.forcedSubtitlesOnly"
-        static let openSubtitlesAPIKey = "kinema.openSubtitlesAPIKey"
         static let wifiSharingEnabled = "kinema.wifiSharingEnabled"
         static let wifiSharingPasscode = "kinema.wifiSharingPasscode"
         static let wifiSharingPreferIPv6 = "kinema.wifiSharingPreferIPv6"
@@ -236,7 +271,6 @@ public final class PreferencesStore {
             preferredSubtitleLanguage: defaults.string(forKey: Keys.preferredSubtitleLanguage) ?? "en",
             preferSDHSubtitles: defaults.object(forKey: Keys.preferSDHSubtitles) as? Bool ?? false,
             forcedSubtitlesOnly: defaults.object(forKey: Keys.forcedSubtitlesOnly) as? Bool ?? false,
-            openSubtitlesAPIKey: defaults.string(forKey: Keys.openSubtitlesAPIKey) ?? "",
             wifiSharingEnabled: defaults.object(forKey: Keys.wifiSharingEnabled) as? Bool ?? false,
             wifiSharingPasscode: defaults.string(forKey: Keys.wifiSharingPasscode) ?? "",
             wifiSharingPreferIPv6: defaults.object(forKey: Keys.wifiSharingPreferIPv6) as? Bool ?? true
@@ -271,7 +305,6 @@ public final class PreferencesStore {
         defaults.set(preferences.preferredSubtitleLanguage, forKey: Keys.preferredSubtitleLanguage)
         defaults.set(preferences.preferSDHSubtitles, forKey: Keys.preferSDHSubtitles)
         defaults.set(preferences.forcedSubtitlesOnly, forKey: Keys.forcedSubtitlesOnly)
-        defaults.set(preferences.openSubtitlesAPIKey, forKey: Keys.openSubtitlesAPIKey)
         defaults.set(preferences.wifiSharingEnabled, forKey: Keys.wifiSharingEnabled)
         defaults.set(preferences.wifiSharingPasscode, forKey: Keys.wifiSharingPasscode)
         defaults.set(preferences.wifiSharingPreferIPv6, forKey: Keys.wifiSharingPreferIPv6)

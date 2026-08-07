@@ -172,7 +172,7 @@ public struct LibraryBrowserView: View {
         }
         .onChange(of: browse.virtualPath) { _, _ in
             recomputeOrganizedContent()
-            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(32).map(\.url)))
+            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(48).map(\.url)))
             refreshWatchedBadgesAfterListing()
         }
         .alert(KinemaCopy.rename, isPresented: Binding(
@@ -793,7 +793,7 @@ public struct LibraryBrowserView: View {
             listedDirectoryPath = path
             isReloading = false
 
-            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(32).map(\.url)))
+            ThumbnailPrefetcher.schedule(Array(displayedVideos.prefix(48).map(\.url)))
             refreshWatchedBadgesAfterListing(generation: generation)
         }
     }

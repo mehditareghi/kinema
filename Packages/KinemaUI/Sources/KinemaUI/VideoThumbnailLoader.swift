@@ -74,7 +74,11 @@ enum VideoThumbnailLoader {
         return nil
     }
 
-    static func loadPreview(url: URL, at time: TimeInterval) async -> VideoPreview {
+    static func loadPreview(
+        url: URL,
+        at time: TimeInterval,
+        priority: ThumbnailPipeline.Priority = .visible
+    ) async -> VideoPreview {
         if Task.isCancelled {
             return VideoPreview(image: nil, duration: nil, qualityLabel: nil)
         }
@@ -84,7 +88,7 @@ enum VideoThumbnailLoader {
         }
 
         let mediaID = ThumbnailDiskStore.mediaID(for: url) as NSString
-        let preview = await MediaArtworkService.loadPreview(for: url, at: time)
+        let preview = await MediaArtworkService.loadPreview(for: url, at: time, priority: priority)
         if Task.isCancelled {
             return VideoPreview(image: nil, duration: nil, qualityLabel: nil)
         }

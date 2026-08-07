@@ -8,7 +8,12 @@ public enum ThumbnailPrefetcher {
         Task.detached(priority: .background) {
             for url in urls {
                 if Task.isCancelled { return }
-                _ = await MediaArtworkService.loadPreview(for: url, at: 0)
+                // Skip work we already paid for — prefetch should never block visible loads.
+                _ = await MediaArtworkService.loadPreview(
+                    for: url,
+                    at: 0,
+                    priority: .background
+                )
             }
         }
     }

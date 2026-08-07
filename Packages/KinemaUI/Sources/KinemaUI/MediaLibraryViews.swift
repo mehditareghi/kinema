@@ -62,7 +62,6 @@ struct MediaPosterCard: View {
     @State private var probedDuration: TimeInterval?
     @State private var qualityLabel: String?
     @State private var loadFailed = false
-    @State private var isLoading = false
 
     private var thumbTime: TimeInterval {
         VideoThumbnailLoader.preferredTime(for: progress)
@@ -83,13 +82,10 @@ struct MediaPosterCard: View {
     private var poster: some View {
         Color.clear
             .aspectRatio(MediaLibraryLayout.posterAspect, contentMode: .fit)
+            .frame(maxWidth: .infinity)
             .overlay {
                 ZStack {
-                    if thumbnail == nil {
-                        posterBackground
-                    } else {
-                        Color.black
-                    }
+                    posterBackground
 
                     thumbnailLayer
 
@@ -118,17 +114,22 @@ struct MediaPosterCard: View {
                 hydrateFromCache()
                 guard thumbnail == nil else { return }
 
-                isLoading = true
                 loadFailed = false
 
-                let preview = await VideoThumbnailLoader.loadPreview(url: url, at: thumbTime)
+                let preview = await VideoThumbnailLoader.loadPreview(
+                    url: url,
+                    at: thumbTime,
+                    priority: .visible
+                )
                 guard !Task.isCancelled else { return }
 
-                isLoading = false
-                thumbnail = preview.image
+                // Metadata first (no layout animation), then fade the frame in.
                 probedDuration = preview.duration
                 qualityLabel = preview.qualityLabel
                 loadFailed = preview.image == nil
+                withAnimation(.easeOut(duration: 0.22)) {
+                    thumbnail = preview.image
+                }
             }
     }
 
@@ -138,7 +139,6 @@ struct MediaPosterCard: View {
         probedDuration = cached.duration
         qualityLabel = cached.qualityLabel
         loadFailed = cached.image == nil
-        isLoading = false
     }
 
     private func qualityBadge(_ label: String) -> some View {
@@ -160,19 +160,24 @@ struct MediaPosterCard: View {
 
     @ViewBuilder
     private var thumbnailLayer: some View {
-        if let thumbnail {
-            Image(platformImage: thumbnail)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-        } else if loadFailed {
-            Image(systemName: "film")
-                .font(.title2.weight(.light))
-                .foregroundStyle(.secondary)
-        } else if isLoading {
-            ProgressView()
-                .controlSize(.small)
+        // GeometryReader pins the image to the poster bounds so intrinsic
+        // image size can never resize the placeholder vs final frame.
+        GeometryReader { geo in
+            ZStack {
+                if let thumbnail {
+                    Image(platformImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .transition(.opacity)
+                } else if loadFailed {
+                    Image(systemName: "film")
+                        .font(.title2.weight(.light))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -223,55 +228,60 @@ struct MediaPosterCard: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.subheadline.weight(.medium))
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
                 .foregroundStyle(.primary)
 
-            if let progress, progress.duration > 0 {
-                if progress.isMostlyFinished {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(accent)
-                        Text("Watched")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(accent)
-                        Text("·")
-                            .foregroundStyle(.secondary)
-                        Text(formatTime(progress.duration))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .lineLimit(1)
-                } else {
-                    HStack(spacing: 6) {
-                        Text("Resume \(formatTime(progress.lastPosition))")
-                        Text("·")
-                        Text("\(formatTime(max(0, progress.duration - progress.lastPosition))) left")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-            } else if let displayDuration, displayDuration > 0 {
-                HStack(spacing: 6) {
-                    Text(formatTime(displayDuration))
-                    if let qualityLabel, !qualityLabel.isEmpty {
-                        Text("·")
-                        Text(qualityLabel)
-                    }
-                }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else if let qualityLabel, !qualityLabel.isEmpty {
-                Text(qualityLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            metadataSubtitle
+                .font(.caption)
+                .lineLimit(1, reservesSpace: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var metadataSubtitle: some View {
+        if let progress, progress.duration > 0 {
+            if progress.isMostlyFinished {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(accent)
+                    Text("Watched")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(accent)
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(formatTime(progress.duration))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text("Resume \(formatTime(progress.lastPosition))")
+                    Text("·")
+                    Text("\(formatTime(max(0, progress.duration - progress.lastPosition))) left")
+                }
+                .foregroundStyle(.secondary)
+            }
+        } else if let displayDuration, displayDuration > 0 {
+            HStack(spacing: 6) {
+                Text(formatTime(displayDuration))
+                if let qualityLabel, !qualityLabel.isEmpty {
+                    Text("·")
+                    Text(qualityLabel)
+                }
+            }
+            .foregroundStyle(.secondary)
+        } else if let qualityLabel, !qualityLabel.isEmpty {
+            Text(qualityLabel)
+                .foregroundStyle(.secondary)
+        } else {
+            // Keep layout height identical before duration/quality are known.
+            Text(" ")
+                .foregroundStyle(.clear)
+                .accessibilityHidden(true)
+        }
     }
 }
 

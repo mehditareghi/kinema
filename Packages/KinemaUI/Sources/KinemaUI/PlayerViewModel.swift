@@ -48,6 +48,10 @@ public final class PlayerViewModel {
 
     public var isInPlayer: Bool { appMode == .player }
 
+    public var isPresentingPlayerSheet: Bool {
+        showPlaylist || showSubtitles || showAudio || showChapters || showSettings
+    }
+
     public func prepare() {
         try? session.prepare()
     }

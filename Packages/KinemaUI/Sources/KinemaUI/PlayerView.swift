@@ -118,22 +118,8 @@ public struct PlayerView: View {
         .sheet(isPresented: $viewModel.showSettings) {
             SettingsView()
         }
-        .onChange(of: viewModel.showSettings) { _, isShowing in
-            if isShowing {
-                viewModel.cancelAutoHideControls()
-            } else if viewModel.showControls {
-                viewModel.scheduleHideControls()
-            }
-        }
-        .onChange(of: viewModel.showAudio) { _, isShowing in
-            if isShowing {
-                viewModel.cancelAutoHideControls()
-            } else if viewModel.showControls {
-                viewModel.scheduleHideControls()
-            }
-        }
-        .onChange(of: viewModel.showChapters) { _, isShowing in
-            if isShowing {
+        .onChange(of: viewModel.isPresentingPlayerSheet) { _, presenting in
+            if presenting {
                 viewModel.cancelAutoHideControls()
             } else if viewModel.showControls {
                 viewModel.scheduleHideControls()

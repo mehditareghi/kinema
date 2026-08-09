@@ -1,12 +1,12 @@
 #if canImport(SwiftUI) && (os(iOS) || os(tvOS))
 import SwiftUI
 import UIKit
+import QuartzCore
 import OpenGLES
 import Darwin
 import KinemaCore
 import LibMPV
 
-/// VLC-style iOS / tvOS render surface — OpenGL ES into `CAEAGLLayer`, resize on every layout.
 private let iosOpenGLProcAddress: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? = { _, name in
     guard let name else { return nil }
     let symbol = String(cString: name) as CFString
@@ -20,7 +20,7 @@ private let iosOpenGLProcAddress: @convention(c) (UnsafeMutableRawPointer?, Unsa
 private let iosRenderUpdateCallback: @convention(c) (UnsafeMutableRawPointer?) -> Void = { ctx in
     guard let ctx else { return }
     let view = Unmanaged<GLESRenderSurface>.fromOpaque(ctx).takeUnretainedValue()
-    view.scheduleRedraw()
+    view.noteFrameAvailable()
 }
 
 public final class GLESRenderSurface: UIView, MPVRenderSurface {
@@ -32,8 +32,9 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
     private var pixelWidth: GLint = 1
     private var pixelHeight: GLint = 1
     private var bufferNeedsReset = true
-    private var redrawScheduled = false
-    private let redrawLock = NSLock()
+    private var displayLink: CADisplayLink?
+    private var hasPendingFrame = false
+    private let frameLock = NSLock()
 
     public override class var layerClass: AnyClass { CAEAGLLayer.self }
 
@@ -56,13 +57,19 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
+    deinit {
+        stopDisplayLink()
+    }
+
     public func attach(to controller: MPVController) {
         self.controller = controller
         setupRenderContextIfNeeded()
         setNeedsLayout()
+        startDisplayLinkIfNeeded()
     }
 
     public func detach() {
+        stopDisplayLink()
         clearRenderContext()
         controller = nil
         deleteGLBuffers()
@@ -88,9 +95,8 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
         if pixelW != Int(pixelWidth) || pixelH != Int(pixelHeight) {
             bufferNeedsReset = true
         }
-        // Avoid scheduling a redraw storm from unrelated layout passes while idle.
         if renderContext != nil {
-            scheduleRedraw()
+            noteFrameAvailable()
         }
     }
 
@@ -100,34 +106,53 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
             contentScaleFactor = window.screen.nativeScale
             bufferNeedsReset = true
             setupRenderContextIfNeeded()
-            scheduleRedraw()
+            startDisplayLinkIfNeeded()
+            noteFrameAvailable()
+        } else {
+            stopDisplayLink()
         }
-    }
-
-    public override func display(_ layer: CALayer) {
-        renderFrame()
     }
 
     public override func setNeedsDisplay() {
-        layer.setNeedsDisplay()
+        noteFrameAvailable()
     }
 
-    func scheduleRedraw() {
-        redrawLock.lock()
-        guard !redrawScheduled else {
-            redrawLock.unlock()
-            return
-        }
-        redrawScheduled = true
-        redrawLock.unlock()
+    func noteFrameAvailable() {
+        frameLock.lock()
+        hasPendingFrame = true
+        frameLock.unlock()
+    }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.redrawLock.lock()
-            self.redrawScheduled = false
-            self.redrawLock.unlock()
-            self.setNeedsDisplay()
+    private func startDisplayLinkIfNeeded() {
+        guard displayLink == nil, window != nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(handleDisplayLink(_:)))
+        let maxFPS = Float(window?.screen.maximumFramesPerSecond ?? UIScreen.main.maximumFramesPerSecond)
+        if #available(iOS 15.0, tvOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: 24,
+                maximum: max(maxFPS, 60),
+                preferred: max(maxFPS, 60)
+            )
+        } else {
+            link.preferredFramesPerSecond = Int(max(maxFPS, 60))
         }
+        // `.common` keeps UI + video pacing alive during gestures / sheet interaction.
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func handleDisplayLink(_ link: CADisplayLink) {
+        frameLock.lock()
+        let shouldRender = hasPendingFrame || bufferNeedsReset
+        hasPendingFrame = false
+        frameLock.unlock()
+        guard shouldRender else { return }
+        renderFrame()
     }
 
     private func pixelScale() -> CGFloat {
@@ -196,6 +221,9 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
         _ = mpv_render_context_update(renderContext)
 
         var flip: Int32 = 1
+        // Critical: do not block the main/UI thread waiting for video frame time
+        // (default mpv behavior). VLC avoids this via AVSampleBufferDisplayLayer.
+        var blockForTargetTime: Int32 = 0
         var fbo = mpv_opengl_fbo(
             fbo: GLint(frameBuffer),
             w: max(pixelWidth, 1),
@@ -205,18 +233,24 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
 
         withUnsafePointer(to: &fbo) { fboPointer in
             withUnsafePointer(to: &flip) { flipPointer in
-                var params: [mpv_render_param] = [
-                    mpv_render_param(
-                        type: MPV_RENDER_PARAM_OPENGL_FBO,
-                        data: UnsafeMutableRawPointer(mutating: fboPointer)
-                    ),
-                    mpv_render_param(
-                        type: MPV_RENDER_PARAM_FLIP_Y,
-                        data: UnsafeMutableRawPointer(mutating: flipPointer)
-                    ),
-                    mpv_render_param(type: mpv_render_param_type(0), data: nil)
-                ]
-                mpv_render_context_render(renderContext, &params)
+                withUnsafePointer(to: &blockForTargetTime) { blockPointer in
+                    var params: [mpv_render_param] = [
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_OPENGL_FBO,
+                            data: UnsafeMutableRawPointer(mutating: fboPointer)
+                        ),
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_FLIP_Y,
+                            data: UnsafeMutableRawPointer(mutating: flipPointer)
+                        ),
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME,
+                            data: UnsafeMutableRawPointer(mutating: blockPointer)
+                        ),
+                        mpv_render_param(type: mpv_render_param_type(0), data: nil)
+                    ]
+                    mpv_render_context_render(renderContext, &params)
+                }
             }
         }
 
@@ -268,7 +302,8 @@ public final class GLESRenderSurface: UIView, MPVRenderSurface {
             Unmanaged.passUnretained(self).toOpaque()
         )
         bufferNeedsReset = true
-        scheduleRedraw()
+        startDisplayLinkIfNeeded()
+        noteFrameAvailable()
         NSLog(
             "Kinema: OpenGL render surface ready (%.0fx%.0f @ %.0fx scale)",
             bounds.width,
@@ -352,6 +387,7 @@ public typealias IOSRenderContainerView = GLESRenderContainerView
 #if canImport(SwiftUI) && os(macOS)
 import SwiftUI
 import AppKit
+import CoreVideo
 import KinemaCore
 import LibMPV
 
@@ -366,14 +402,16 @@ private let macOSOpenGLProcAddress: @convention(c) (UnsafeMutableRawPointer?, Un
 private let macOSRenderUpdateCallback: @convention(c) (UnsafeMutableRawPointer?) -> Void = { ctx in
     guard let ctx else { return }
     let view = Unmanaged<MacOSRenderSurface>.fromOpaque(ctx).takeUnretainedValue()
-    view.scheduleRedraw()
+    view.noteFrameAvailable()
 }
 
 public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
     private weak var controller: MPVController?
     private var renderContext: OpaquePointer?
-    private var redrawScheduled = false
-    private let redrawLock = NSLock()
+    private var hasPendingFrame = false
+    private let frameLock = NSLock()
+    private var displayLink: CVDisplayLink?
+    private var isDrawing = false
 
     public override init(frame frameRect: NSRect) {
         let attributes: [NSOpenGLPixelFormatAttribute] = [
@@ -382,8 +420,9 @@ public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
         ]
         super.init(frame: frameRect, pixelFormat: NSOpenGLPixelFormat(attributes: attributes))!
         autoresizingMask = [.width, .height]
+        // Match mpv cocoa-cb: vsync via swap interval; timing reported from display link.
         if let context = openGLContext {
-            var swapInterval: GLint = 0
+            var swapInterval: GLint = 1
             context.setValues(&swapInterval, for: .swapInterval)
         }
     }
@@ -395,46 +434,94 @@ public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
+    deinit {
+        stopDisplayLink()
+    }
+
     public func attach(to controller: MPVController) {
         self.controller = controller
         setupRenderContextIfNeeded()
+        startDisplayLinkIfNeeded()
     }
 
     public func detach() {
+        stopDisplayLink()
         clearRenderContext()
         controller = nil
     }
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        setupRenderContextIfNeeded()
+        if window != nil {
+            setupRenderContextIfNeeded()
+            startDisplayLinkIfNeeded()
+            noteFrameAvailable()
+        } else {
+            stopDisplayLink()
+        }
     }
 
     public override func reshape() {
         super.reshape()
         openGLContext?.update()
-        scheduleRedraw()
+        noteFrameAvailable()
     }
 
-    func scheduleRedraw() {
-        redrawLock.lock()
-        guard !redrawScheduled else {
-            redrawLock.unlock()
-            return
-        }
-        redrawScheduled = true
-        redrawLock.unlock()
+    public func setNeedsDisplay() {
+        noteFrameAvailable()
+    }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.redrawLock.lock()
-            self.redrawScheduled = false
-            self.redrawLock.unlock()
-            self.needsDisplay = true
+    func noteFrameAvailable() {
+        frameLock.lock()
+        hasPendingFrame = true
+        frameLock.unlock()
+    }
+
+    private func startDisplayLinkIfNeeded() {
+        guard displayLink == nil else { return }
+        var link: CVDisplayLink?
+        guard CVDisplayLinkCreateWithActiveCGDisplays(&link) == kCVReturnSuccess,
+              let link else { return }
+
+        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, context in
+            guard let context else { return kCVReturnSuccess }
+            let surface = Unmanaged<MacOSRenderSurface>.fromOpaque(context).takeUnretainedValue()
+            DispatchQueue.main.async {
+                surface.handleDisplayLink()
+            }
+            return kCVReturnSuccess
         }
+
+        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
+        if let context = openGLContext {
+            let pixelFormat = context.pixelFormat.cglPixelFormatObj
+            let cglContext = context.cglContextObj
+            CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(link, cglContext!, pixelFormat!)
+        }
+        CVDisplayLinkStart(link)
+        displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        if let displayLink {
+            CVDisplayLinkStop(displayLink)
+        }
+        displayLink = nil
+    }
+
+    private func handleDisplayLink() {
+        frameLock.lock()
+        let shouldDraw = hasPendingFrame
+        hasPendingFrame = false
+        frameLock.unlock()
+        guard shouldDraw, !isDrawing else { return }
+        needsDisplay = true
     }
 
     public override func draw(_ dirtyRect: NSRect) {
+        isDrawing = true
+        defer { isDrawing = false }
+
         setupRenderContextIfNeeded()
         guard let context = openGLContext else { return }
         context.makeCurrentContext()
@@ -445,8 +532,11 @@ public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
             return
         }
 
+        _ = mpv_render_context_update(renderContext)
+
         let backing = convertToBacking(bounds)
         var flip: Int32 = 1
+        var blockForTargetTime: Int32 = 0
         var fbo = mpv_opengl_fbo(
             fbo: 0,
             w: Int32(max(backing.width, 1)),
@@ -456,27 +546,29 @@ public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
 
         withUnsafePointer(to: &fbo) { fboPointer in
             withUnsafePointer(to: &flip) { flipPointer in
-                var params: [mpv_render_param] = [
-                    mpv_render_param(
-                        type: MPV_RENDER_PARAM_OPENGL_FBO,
-                        data: UnsafeMutableRawPointer(mutating: fboPointer)
-                    ),
-                    mpv_render_param(
-                        type: MPV_RENDER_PARAM_FLIP_Y,
-                        data: UnsafeMutableRawPointer(mutating: flipPointer)
-                    ),
-                    mpv_render_param(type: mpv_render_param_type(0), data: nil)
-                ]
-                mpv_render_context_render(renderContext, &params)
+                withUnsafePointer(to: &blockForTargetTime) { blockPointer in
+                    var params: [mpv_render_param] = [
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_OPENGL_FBO,
+                            data: UnsafeMutableRawPointer(mutating: fboPointer)
+                        ),
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_FLIP_Y,
+                            data: UnsafeMutableRawPointer(mutating: flipPointer)
+                        ),
+                        mpv_render_param(
+                            type: MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME,
+                            data: UnsafeMutableRawPointer(mutating: blockPointer)
+                        ),
+                        mpv_render_param(type: mpv_render_param_type(0), data: nil)
+                    ]
+                    mpv_render_context_render(renderContext, &params)
+                }
             }
         }
 
         context.flushBuffer()
         mpv_render_context_report_swap(renderContext)
-    }
-
-    public func setNeedsDisplay() {
-        needsDisplay = true
     }
 
     private func setupRenderContextIfNeeded() {
@@ -517,7 +609,8 @@ public final class MacOSRenderSurface: NSOpenGLView, MPVRenderSurface {
             macOSRenderUpdateCallback,
             Unmanaged.passUnretained(self).toOpaque()
         )
-        needsDisplay = true
+        startDisplayLinkIfNeeded()
+        noteFrameAvailable()
     }
 
     private func clearRenderContext() {
@@ -553,9 +646,10 @@ public final class MacOSRenderContainerView: NSView {
     public override func layout() {
         super.layout()
         let size = bounds.size
-        guard size != lastLayoutSize else { return }
-        lastLayoutSize = size
-        surface.scheduleRedraw()
+        if size != lastLayoutSize {
+            lastLayoutSize = size
+            surface.noteFrameAvailable()
+        }
     }
 }
 

@@ -277,6 +277,8 @@ public final class PlayerViewModel {
             NowPlayingController.shared.handlePlaybackUpdate()
         case .stateChanged:
             NowPlayingController.shared.handleStateChange()
+        case .chaptersUpdated:
+            NowPlayingController.shared.handleStateChange()
         case .playlistEnded:
             exitPlayer()
         case .error(let message):

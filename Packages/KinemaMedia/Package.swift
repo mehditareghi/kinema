@@ -25,7 +25,8 @@ let package = Package(
                 .product(name: "FFmpegKit", package: "MPVKitVendor")
             ],
             linkerSettings: [
-                .linkedFramework("AVFoundation")
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("ImageIO")
             ]
         )
     ]

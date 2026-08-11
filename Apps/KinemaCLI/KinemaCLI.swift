@@ -12,7 +12,6 @@ struct KinemaCLI {
 
         var mediaPaths: [String] = []
         var newWindow = false
-        var mpvOptions: [String: String] = [:]
 
         var i = 0
         while i < args.count {
@@ -25,12 +24,6 @@ struct KinemaCLI {
                 newWindow = true
             case "--separate-windows":
                 newWindow = true
-            case let a where a.hasPrefix("--mpv-"):
-                let key = String(a.dropFirst(6)).replacingOccurrences(of: "-", with: "_")
-                if i + 1 < args.count {
-                    mpvOptions[key] = args[i + 1]
-                    i += 1
-                }
             default:
                 if arg.hasPrefix("--") {
                     fputs("Unknown option: \(arg)\n", stderr)
@@ -57,14 +50,10 @@ struct KinemaCLI {
         var components = URLComponents()
         components.scheme = "kinema"
         components.host = "open"
-        var query: [URLQueryItem] = [
+        components.queryItems = [
             URLQueryItem(name: "url", value: url.absoluteString),
             URLQueryItem(name: "new_window", value: newWindow ? "1" : "0")
         ]
-        for (key, value) in mpvOptions {
-            query.append(URLQueryItem(name: "mpv_\(key)", value: value))
-        }
-        components.queryItems = query
 
         guard let deepLink = components.url else {
             fputs("Failed to build kinema:// URL\n", stderr)
@@ -90,9 +79,10 @@ struct KinemaCLI {
         Usage: kinema-cli [options] <file|url> [more files...]
 
         Options:
-          --new-window       Open in a new window
-          --mpv-<option> V   Pass mpv option (e.g. --mpv-volume 80)
+          --new-window       Open in a new window / session
           -h, --help         Show this help
+
+        Builds a kinema://open URL and hands it to the Kinema app (macOS).
         """)
     }
 }

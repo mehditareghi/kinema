@@ -879,6 +879,43 @@ public final class PlayerSession: PlaybackEngine {
         }
     }
 
+    /// Whether Lock Screen / headset "next" can advance under the current playlist mode.
+    public var canPlayNextInLineup: Bool {
+        guard !playlist.isEmpty else { return false }
+        switch playlistMode {
+        case .shuffle, .all:
+            return playlist.count > 1
+        case .off, .one:
+            return playlistIndex + 1 < playlist.count
+        }
+    }
+
+    /// Whether "previous" can move to another lineup item (restart-current is always available while playing).
+    public var canPlayPreviousInLineup: Bool {
+        guard !playlist.isEmpty else { return false }
+        switch playlistMode {
+        case .shuffle:
+            return !shuffleHistory.isEmpty || playlist.count > 1
+        case .all:
+            return playlist.count > 1
+        case .off, .one:
+            return playlistIndex > 0
+        }
+    }
+
+    /// Headset / Lock Screen previous: restart current after a few seconds, else prior lineup item.
+    public func playPreviousFromRemote(restartThreshold: TimeInterval = 3) {
+        if info.position > restartThreshold {
+            seek(to: 0)
+            return
+        }
+        if canPlayPreviousInLineup {
+            playPrevious()
+        } else {
+            seek(to: 0)
+        }
+    }
+
     @discardableResult
     public func setPlaylistMode(_ mode: PlaylistPlaybackMode) -> String {
         playlistMode = mode

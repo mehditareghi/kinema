@@ -89,21 +89,23 @@ public enum DeepLinkParser {
         )
     }
 
+    /// Builds an open link for parameters the app currently applies.
+    /// Reserved query keys (`pip`, `full_screen`, `enqueue`, `mpv_*`) are parsed
+    /// but not emitted here until their handlers ship.
     public static func buildOpenURL(
         mediaURL: URL,
-        newWindow: Bool = false,
-        pip: Bool = false,
-        fullScreen: Bool = false
+        newWindow: Bool = false
     ) -> URL? {
         var components = URLComponents()
         components.scheme = "kinema"
         components.host = "open"
-        components.queryItems = [
-            URLQueryItem(name: "url", value: mediaURL.absoluteString),
-            URLQueryItem(name: "new_window", value: newWindow ? "1" : "0"),
-            URLQueryItem(name: "pip", value: pip ? "1" : "0"),
-            URLQueryItem(name: "full_screen", value: fullScreen ? "1" : "0")
+        var items = [
+            URLQueryItem(name: "url", value: mediaURL.absoluteString)
         ]
+        if newWindow {
+            items.append(URLQueryItem(name: "new_window", value: "1"))
+        }
+        components.queryItems = items
         return components.url
     }
 }

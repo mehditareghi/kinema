@@ -9,10 +9,10 @@
 - Broad format support via libmpv / FFmpeg (H.264, H.265, AV1, VP9, MKV, and more)
 - Unified SwiftUI interface across Apple platforms
 - Subtitles: auto-match, manual load, Gestdown online TV search, styling
-- Playlists, chapters, A/V track selection
+- Playlists (repeat / shuffle), chapters, A–B loop, A/V track selection
 - Playback history with resume (SwiftData)
-- Picture-in-Picture (iOS / macOS)
-- Gesture controls and keyboard shortcuts
+- System Now Playing / Lock Screen controls (where available)
+- Video filters, fit / zoom / rotate, gesture controls, keyboard shortcuts
 - `kinema://` deep links and Share Extension
 - macOS: `kinema-cli`, Music Mode, yt-dlp online media support
 
@@ -38,13 +38,17 @@ Xcode will automatically fetch [MPVKit](https://github.com/karelrooted/MPVKit) v
 
 ### 3. Build
 
-Select the **Kinema** scheme and your target platform, then **⌘B**.
+Select a platform scheme, then **⌘B**.
 
 | Scheme | Platform |
 |--------|----------|
-| Kinema | iOS / iPadOS / macOS / tvOS |
-| KinemaCLI | macOS command-line tool |
-| KinemaShareExtension | iOS / macOS share extension |
+| `Kinema_iOS` | iOS / iPadOS |
+| `Kinema_macOS` | macOS |
+| `Kinema_tvOS` | tvOS |
+| `KinemaCLI` | macOS command-line tool |
+| `KinemaShareExtension_iOS` / `_macOS` | Share extensions |
+
+> Development builds in this repo often use Xcode beta via `DEVELOPER_DIR`.
 
 ### 4. macOS online media (optional)
 
@@ -73,31 +77,47 @@ UI (SwiftUI) → PlayerSession → MPVController → libmpv
 
 ## CLI (macOS)
 
+Opens media in Kinema via a `kinema://` URL.
+
 ```bash
 kinema-cli /path/to/video.mkv
-kinema-cli --new-window --pip "https://example.com/stream.m3u8"
-kinema-cli --mpv-volume=80 video.mp4
+kinema-cli --new-window "https://example.com/stream.m3u8"
 ```
+
+| Option | Effect |
+|--------|--------|
+| `--new-window` | Ask the app to load in a separate session / window |
+| `-h`, `--help` | Show usage |
 
 ## Deep Links
 
+Currently applied by the app:
+
 ```
 kinema://open?url=<encoded-url>
-kinema://open?url=<url>&pip=1&new_window=1
+kinema://open?url=<url>&new_window=1
 ```
 
+The parser also accepts `pip`, `full_screen`, `enqueue`, and `mpv_*` query items for forward compatibility; they are **not applied** yet (Picture-in-Picture is tracked separately).
+
 ## Keyboard Shortcuts (macOS)
+
+Defaults (customize in **Preferences → Keyboard Shortcuts**):
 
 | Key | Action |
 |-----|--------|
 | Space | Play / Pause |
-| ← / → | Seek ±5s |
-| J / K / L | Seek back / Pause / Seek forward |
+| ← / J | Seek back 5s |
+| → / L | Seek forward 5s |
+| K | Pause |
 | F | Toggle fullscreen |
 | M | Mute |
-| ↑ / ↓ | Volume ±5% |
-
-Customize in **Settings → Keyboard**.
+| ↑ / ↓ | Volume |
+| [ / ] | Speed down / up |
+| , / . | Previous / next chapter |
+| B | A–B loop (set A / set B / clear) |
+| A / V | Cycle audio / subtitles |
+| G / H | Subtitle delay −/+ 0.1s |
 
 ## Regenerating mpv Bindings
 

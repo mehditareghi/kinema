@@ -255,6 +255,23 @@ public struct Chapter: Identifiable, Hashable, Sendable {
     }
 }
 
+/// How the video plane maps into the player window (mpv pan/scan + aspect).
+public enum VideoFitMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case fit
+    case fill
+    case stretch
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .fit: return "Fit"
+        case .fill: return "Fill"
+        case .stretch: return "Stretch"
+        }
+    }
+}
+
 public struct PlaybackInfo: Sendable, Equatable {
     public var position: TimeInterval
     public var duration: TimeInterval

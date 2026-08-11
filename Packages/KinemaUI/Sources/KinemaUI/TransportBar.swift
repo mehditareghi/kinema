@@ -219,6 +219,36 @@ struct PlayerToolsMenu: View {
             Button { viewModel.showAudio = true } label: {
                 Label(KinemaCopy.audio, systemImage: "slider.horizontal.3")
             }
+            Menu {
+                ForEach(VideoFitMode.allCases) { mode in
+                    Button {
+                        viewModel.showOSD(viewModel.session.setVideoFitMode(mode))
+                    } label: {
+                        if viewModel.session.videoFitMode == mode {
+                            Label(mode.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(mode.displayName)
+                        }
+                    }
+                }
+                Divider()
+                Button(KinemaCopy.pictureZoomIn) {
+                    viewModel.showOSD(viewModel.session.adjustVideoZoom(by: 0.1))
+                }
+                Button(KinemaCopy.pictureZoomOut) {
+                    viewModel.showOSD(viewModel.session.adjustVideoZoom(by: -0.1))
+                }
+                Button(KinemaCopy.pictureRotate) {
+                    viewModel.showOSD(viewModel.session.rotateVideo90())
+                }
+                if viewModel.session.isVideoDisplayCustomized {
+                    Button(KinemaCopy.pictureReset) {
+                        viewModel.showOSD(viewModel.session.resetVideoDisplay())
+                    }
+                }
+            } label: {
+                Label(KinemaCopy.picture, systemImage: "aspectratio")
+            }
             Divider()
             Button {
                 viewModel.isMuted.toggle()

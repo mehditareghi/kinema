@@ -196,6 +196,8 @@ public struct PlayerControlsOverlay: View {
                             : Color.white
                     )
 
+                    VideoDisplayControl(viewModel: viewModel, accent: accent)
+
                     Spacer(minLength: 8)
 
                     PlaybackSpeedControl(

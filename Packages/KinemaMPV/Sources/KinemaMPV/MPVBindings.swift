@@ -35,6 +35,11 @@ public enum MPVProperty: String, Sendable {
     case videoParamsPrimaries = "video-params/primaries"
     case videoParamsSigPeak = "video-params/sig-peak"
     case audioParams = "audio-params"
+    case keepaspect = "keepaspect"
+    case panscan = "panscan"
+    case videoZoom = "video-zoom"
+    case videoRotate = "video-rotate"
+    case videoUnscaled = "video-unscaled"
 }
 
 /// Curated mpv commands.

@@ -319,6 +319,28 @@ public final class MPVController: @unchecked Sendable {
         setStringOption(MPVOption.targetPeak.rawValue, String(format: "%.0f", targetPeak))
     }
 
+    /// Fit / fill / stretch + zoom + rotate.
+    public func applyVideoDisplay(fit: VideoFitMode, zoom: Double, rotateDegrees: Int) {
+        let clampedZoom = min(3, max(-1, zoom))
+        let rotate = ((rotateDegrees % 360) + 360) % 360
+        switch fit {
+        case .fit:
+            setStringOption(MPVProperty.keepaspect.rawValue, "yes")
+            setProperty(MPVProperty.panscan.rawValue, double: 0)
+            setStringOption(MPVProperty.videoUnscaled.rawValue, "no")
+        case .fill:
+            setStringOption(MPVProperty.keepaspect.rawValue, "yes")
+            setProperty(MPVProperty.panscan.rawValue, double: 1)
+            setStringOption(MPVProperty.videoUnscaled.rawValue, "no")
+        case .stretch:
+            setStringOption(MPVProperty.keepaspect.rawValue, "no")
+            setProperty(MPVProperty.panscan.rawValue, double: 0)
+            setStringOption(MPVProperty.videoUnscaled.rawValue, "no")
+        }
+        setProperty(MPVProperty.videoZoom.rawValue, double: clampedZoom)
+        setStringOption(MPVProperty.videoRotate.rawValue, "\(rotate)")
+    }
+
     /// True when the current video looks like HDR (PQ/HLG transfer, or BT.2020 with sig-peak).
     public func isHDRContent() -> Bool {
         guard isInitialized, !isShuttingDown else { return false }

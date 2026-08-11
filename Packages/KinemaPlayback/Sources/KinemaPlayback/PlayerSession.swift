@@ -30,6 +30,12 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var abLoopB: TimeInterval?
     /// True when the loaded video looks like HDR (PQ/HLG / BT.2020 peak).
     public private(set) var isHDRContent = false
+    /// How the picture maps into the window (Fit / Fill / Stretch).
+    public private(set) var videoFitMode: VideoFitMode = .fit
+    /// mpv `video-zoom` (log₂ scale). 0 = default.
+    public private(set) var videoZoom: Double = 0
+    /// Clockwise rotation in degrees (0 / 90 / 180 / 270).
+    public private(set) var videoRotateDegrees: Int = 0
     public private(set) var activeSubtitleTrackID: Int?
     public private(set) var activeSecondarySubtitleTrackID: Int?
 
@@ -152,6 +158,7 @@ public final class PlayerSession: PlaybackEngine {
         controller.setMute(preferences.isMuted)
         applyAudioPipeline()
         applyHDRToneMappingPreferences()
+        restoreVideoDisplayPreferences()
         isPrepared = true
         #endif
     }
@@ -200,6 +207,7 @@ public final class PlayerSession: PlaybackEngine {
         controller.setMute(options.isMuted)
         applyAudioPipeline()
         applyHDRToneMappingPreferences()
+        restoreVideoDisplayPreferences()
         isPrepared = true
     }
 
@@ -632,6 +640,75 @@ public final class PlayerSession: PlaybackEngine {
             targetPeak: peak
         )
     }
+
+    public var isVideoDisplayCustomized: Bool {
+        videoFitMode != .fit || abs(videoZoom) > 0.001 || videoRotateDegrees != 0
+    }
+
+    public func setVideoFitMode(_ mode: VideoFitMode) -> String {
+        videoFitMode = mode
+        persistAndApplyVideoDisplay()
+        return mode.displayName
+    }
+
+    public func adjustVideoZoom(by delta: Double) -> String {
+        videoZoom = min(3, max(-1, videoZoom + delta))
+        persistAndApplyVideoDisplay()
+        let percent = Int(((pow(2.0, videoZoom) - 1) * 100).rounded())
+        if percent == 0 { return "Zoom 100%" }
+        return percent > 0 ? "Zoom +\(percent)%" : "Zoom \(percent)%"
+    }
+
+    public func rotateVideo90() -> String {
+        videoRotateDegrees = (videoRotateDegrees + 90) % 360
+        persistAndApplyVideoDisplay()
+        return "Rotate \(videoRotateDegrees)°"
+    }
+
+    public func resetVideoDisplay() -> String {
+        videoFitMode = .fit
+        videoZoom = 0
+        videoRotateDegrees = 0
+        persistAndApplyVideoDisplay()
+        return "Reset picture"
+    }
+
+    private func restoreVideoDisplayPreferences() {
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: Self.videoFitModeKey),
+           let mode = VideoFitMode(rawValue: raw) {
+            videoFitMode = mode
+        }
+        if defaults.object(forKey: Self.videoZoomKey) != nil {
+            videoZoom = min(3, max(-1, defaults.double(forKey: Self.videoZoomKey)))
+        }
+        if defaults.object(forKey: Self.videoRotateKey) != nil {
+            let rotate = defaults.integer(forKey: Self.videoRotateKey)
+            videoRotateDegrees = ((rotate % 360) + 360) % 360
+        }
+        applyVideoDisplay()
+    }
+
+    private func persistAndApplyVideoDisplay() {
+        let defaults = UserDefaults.standard
+        defaults.set(videoFitMode.rawValue, forKey: Self.videoFitModeKey)
+        defaults.set(videoZoom, forKey: Self.videoZoomKey)
+        defaults.set(videoRotateDegrees, forKey: Self.videoRotateKey)
+        applyVideoDisplay()
+    }
+
+    private func applyVideoDisplay() {
+        guard isPrepared || controller.isReady else { return }
+        controller.applyVideoDisplay(
+            fit: videoFitMode,
+            zoom: videoZoom,
+            rotateDegrees: videoRotateDegrees
+        )
+    }
+
+    private static let videoFitModeKey = "kinema.videoFitMode"
+    private static let videoZoomKey = "kinema.videoZoom"
+    private static let videoRotateKey = "kinema.videoRotateDegrees"
 
     public struct AudioOutputDevice: Identifiable, Hashable, Sendable {
         public let id: String
@@ -1511,6 +1588,7 @@ public final class PlayerSession: PlaybackEngine {
                     applyLiveSubtitlePreferences()
                     applyAudioPipeline()
                     applyPreferredAudioLanguage()
+                    applyVideoDisplay()
                     refreshHDRContentFlag()
                     await restoreSubtitleSession(for: item)
                 }

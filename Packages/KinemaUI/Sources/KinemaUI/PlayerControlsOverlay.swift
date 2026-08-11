@@ -185,7 +185,7 @@ public struct PlayerControlsOverlay: View {
                         }
                     }
 
-                    iconButton("repeat", label: KinemaCopy.abLoop) {
+                    iconButton(viewModel.session.abLoopSystemImage, label: KinemaCopy.abLoop) {
                         let message = viewModel.session.cycleABLoop()
                         viewModel.showOSD(message)
                         viewModel.scheduleHideControls()
@@ -197,6 +197,21 @@ public struct PlayerControlsOverlay: View {
                     )
 
                     VideoDisplayControl(viewModel: viewModel, accent: accent)
+
+                    PlaylistModeControl(viewModel: viewModel, accent: accent)
+
+                    iconButton(
+                        "camera.filters",
+                        label: KinemaCopy.videoFilters
+                    ) {
+                        viewModel.cancelAutoHideControls()
+                        viewModel.showVideoFilters = true
+                    }
+                    .foregroundStyle(
+                        PreferencesStore.shared.videoFilters.isAtDefaults
+                            ? Color.white
+                            : accent
+                    )
 
                     Spacer(minLength: 8)
 

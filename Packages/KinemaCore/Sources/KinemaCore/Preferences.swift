@@ -391,16 +391,22 @@ public final class PreferencesStore {
         static let audioPitchScale = "kinema.audioPitchScale"
         static let audioSpatializerEnabled = "kinema.audioSpatializerEnabled"
         static let audioSpatializerAmount = "kinema.audioSpatializerAmount"
+        static let videoFilters = "kinema.videoFilters"
     }
 
     public var preferences: KinemaPreferences {
         didSet { persist() }
     }
 
+    public var videoFilters: VideoFilterSettings {
+        didSet { persistVideoFilters() }
+    }
+
     private init() {
         _ = SubtitleFontRegistry.prepare()
         let storedFont = defaults.string(forKey: Keys.subtitleFontID) ?? SubtitlePreferenceCatalog.defaultFontID
         let storedBands = defaults.array(forKey: Keys.audioEqualizerBands) as? [Double]
+        videoFilters = Self.loadVideoFilters(from: defaults)
         preferences = KinemaPreferences(
             volume: defaults.object(forKey: Keys.volume) as? Double ?? 100,
             isMuted: defaults.object(forKey: Keys.isMuted) as? Bool ?? false,
@@ -524,6 +530,26 @@ public final class PreferencesStore {
         defaults.set(preferences.audioSpatializerAmount, forKey: Keys.audioSpatializerAmount)
     }
 
+    private func persistVideoFilters() {
+        guard let data = try? JSONEncoder().encode(videoFilters) else { return }
+        defaults.set(data, forKey: Keys.videoFilters)
+    }
+
+    private static func loadVideoFilters(from defaults: UserDefaults) -> VideoFilterSettings {
+        guard let data = defaults.data(forKey: Keys.videoFilters),
+              let decoded = try? JSONDecoder().decode(VideoFilterSettings.self, from: data) else {
+            return VideoFilterSettings()
+        }
+        return VideoFilterSettings(
+            brightness: decoded.brightness,
+            contrast: decoded.contrast,
+            saturation: decoded.saturation,
+            gamma: decoded.gamma,
+            debandEnabled: decoded.debandEnabled,
+            sharpen: decoded.sharpen
+        )
+    }
+
     public func mpvOptions() -> [String: String] {
         let fontsDir = SubtitleFontRegistry.prepare()
         let selectedFont = SubtitleFontRegistry.resolveStoredFontSelection(preferences.subtitleFontID)
@@ -567,6 +593,15 @@ public final class PreferencesStore {
         }
         if let af = AudioFilterGraph.build(from: p) {
             options["af"] = af
+        }
+        let vf = videoFilters
+        options["brightness"] = String(format: "%.0f", vf.brightness)
+        options["contrast"] = String(format: "%.0f", vf.contrast)
+        options["saturation"] = String(format: "%.0f", vf.saturation)
+        options["gamma"] = String(format: "%.0f", vf.gamma)
+        options["deband"] = vf.debandEnabled ? "yes" : "no"
+        if let graph = vf.videoFilterGraph {
+            options["vf"] = graph
         }
 
         // Do NOT set secondary-sub-align-x / secondary-sub-ass-override here —

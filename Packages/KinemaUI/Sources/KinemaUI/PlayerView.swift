@@ -112,6 +112,9 @@ public struct PlayerView: View {
         .sheet(isPresented: $viewModel.showAudio) {
             AudioSheet(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showVideoFilters) {
+            VideoFiltersSheet(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showChapters) {
             ChaptersSheet(viewModel: viewModel)
         }
@@ -259,6 +262,9 @@ public struct MusicModeView: View {
         .frame(width: 360, height: 300)
         .sheet(isPresented: $viewModel.showAudio) {
             AudioSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showVideoFilters) {
+            VideoFiltersSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $viewModel.showSubtitles) {
             SubtitlePickerSheet(viewModel: viewModel)

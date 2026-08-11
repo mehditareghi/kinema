@@ -22,6 +22,7 @@ public final class PlayerViewModel {
     public var showPlaylist = false
     public var showSubtitles = false
     public var showAudio = false
+    public var showVideoFilters = false
     public var showChapters = false
     public var showSettings = false
     /// Mirrored from the session so SwiftUI reliably refreshes the Up Next card.
@@ -49,7 +50,7 @@ public final class PlayerViewModel {
     public var isInPlayer: Bool { appMode == .player }
 
     public var isPresentingPlayerSheet: Bool {
-        showPlaylist || showSubtitles || showAudio || showChapters || showSettings
+        showPlaylist || showSubtitles || showAudio || showVideoFilters || showChapters || showSettings
     }
 
     public func prepare() {
@@ -69,6 +70,7 @@ public final class PlayerViewModel {
         openTask?.cancel()
         showSettings = false
         showAudio = false
+        showVideoFilters = false
         showChapters = false
         showSubtitles = false
         showPlaylist = false
@@ -148,12 +150,12 @@ public final class PlayerViewModel {
     }
 
     public func scheduleHideControls(after seconds: TimeInterval = 6) {
-        guard isInPlayer, !showSettings, !showAudio, !showChapters, !showSubtitles, !showPlaylist else { return }
+        guard isInPlayer, !showSettings, !showAudio, !showVideoFilters, !showChapters, !showSubtitles, !showPlaylist else { return }
         hideControlsTask?.cancel()
         hideControlsTask = Task {
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            guard !showSettings, !showAudio, !showChapters, !showSubtitles, !showPlaylist else { return }
+            guard !showSettings, !showAudio, !showVideoFilters, !showChapters, !showSubtitles, !showPlaylist else { return }
             withAnimation(.easeOut(duration: 0.25)) {
                 showControls = false
             }

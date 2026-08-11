@@ -301,6 +301,20 @@ public final class MPVController: @unchecked Sendable {
         setAudioFilters(nil)
     }
 
+    public func setVideoFilters(_ filterGraph: String?) {
+        let value = (filterGraph?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? ""
+        setStringOption(MPVProperty.vf.rawValue, value.isEmpty ? "" : value)
+    }
+
+    public func applyVideoFilters(_ settings: VideoFilterSettings) {
+        setProperty(MPVProperty.brightness.rawValue, double: VideoFilterSettings.clampEqualizer(settings.brightness))
+        setProperty(MPVProperty.contrast.rawValue, double: VideoFilterSettings.clampEqualizer(settings.contrast))
+        setProperty(MPVProperty.saturation.rawValue, double: VideoFilterSettings.clampEqualizer(settings.saturation))
+        setProperty(MPVProperty.gamma.rawValue, double: VideoFilterSettings.clampEqualizer(settings.gamma))
+        setStringOption(MPVProperty.deband.rawValue, settings.debandEnabled ? "yes" : "no")
+        setVideoFilters(settings.videoFilterGraph)
+    }
+
     public func setReplayGain(_ mode: String) {
         setStringOption(MPVProperty.replaygain.rawValue, mode)
     }

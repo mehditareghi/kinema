@@ -272,6 +272,34 @@ public enum VideoFitMode: String, Codable, Sendable, CaseIterable, Identifiable 
     }
 }
 
+/// How the lineup advances at EOF and via next/prev.
+public enum PlaylistPlaybackMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case off
+    case one
+    case all
+    case shuffle
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .off: return "Off"
+        case .one: return "Repeat One"
+        case .all: return "Repeat All"
+        case .shuffle: return "Shuffle"
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .off: return "repeat"
+        case .one: return "repeat.1"
+        case .all: return "repeat"
+        case .shuffle: return "shuffle"
+        }
+    }
+}
+
 public struct PlaybackInfo: Sendable, Equatable {
     public var position: TimeInterval
     public var duration: TimeInterval

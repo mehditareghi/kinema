@@ -24,6 +24,7 @@ public enum MPVProperty: String, Sendable {
     case mute = "mute"
     case aid = "aid"
     case af = "af"
+    case vf = "vf"
     case replaygain = "replaygain"
     case audioDevice = "audio-device"
     case audioDeviceList = "audio-device-list"
@@ -40,6 +41,11 @@ public enum MPVProperty: String, Sendable {
     case videoZoom = "video-zoom"
     case videoRotate = "video-rotate"
     case videoUnscaled = "video-unscaled"
+    case brightness = "brightness"
+    case contrast = "contrast"
+    case saturation = "saturation"
+    case gamma = "gamma"
+    case deband = "deband"
 }
 
 /// Curated mpv commands.

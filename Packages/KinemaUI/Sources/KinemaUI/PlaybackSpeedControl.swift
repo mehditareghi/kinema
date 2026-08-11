@@ -126,6 +126,16 @@ struct PlaybackSpeedControl: View {
                     }
                 }
             }
+            if !isNormalSpeed {
+                Divider()
+                Button {
+                    viewModel.session.setSpeed(1)
+                    viewModel.showOSD(Self.formatSpeed(1))
+                    viewModel.scheduleHideControls()
+                } label: {
+                    Label("Reset to 1×", systemImage: "arrow.counterclockwise")
+                }
+            }
         } label: {
             HStack(spacing: 4) {
                 Text(Self.formatSpeed(viewModel.session.info.speed))

@@ -197,6 +197,21 @@ struct PlayerToolsMenu: View {
             Button { viewModel.showPlaylist = true } label: {
                 Label(KinemaCopy.lineup, systemImage: "list.bullet")
             }
+            Menu {
+                ForEach(PlaylistPlaybackMode.allCases) { mode in
+                    Button {
+                        viewModel.showOSD(viewModel.session.setPlaylistMode(mode))
+                    } label: {
+                        if viewModel.session.playlistMode == mode {
+                            Label(mode.displayName, systemImage: "checkmark")
+                        } else {
+                            Label(mode.displayName, systemImage: mode.systemImage)
+                        }
+                    }
+                }
+            } label: {
+                Label(KinemaCopy.playlistMode, systemImage: viewModel.session.playlistMode.systemImage)
+            }
             if viewModel.session.hasChapters {
                 Button { viewModel.showChapters = true } label: {
                     Label(KinemaCopy.chapters, systemImage: "list.bullet.rectangle")
@@ -210,7 +225,7 @@ struct PlayerToolsMenu: View {
                     viewModel.session.isABLooping
                         ? "Clear A–B Loop"
                         : (viewModel.session.hasABLoopA ? "Set Loop B" : "Set Loop A"),
-                    systemImage: "repeat"
+                    systemImage: viewModel.session.abLoopSystemImage
                 )
             }
             Button { viewModel.showSubtitles = true } label: {
@@ -218,6 +233,9 @@ struct PlayerToolsMenu: View {
             }
             Button { viewModel.showAudio = true } label: {
                 Label(KinemaCopy.audio, systemImage: "slider.horizontal.3")
+            }
+            Button { viewModel.showVideoFilters = true } label: {
+                Label(KinemaCopy.videoFilters, systemImage: "camera.filters")
             }
             Menu {
                 ForEach(VideoFitMode.allCases) { mode in

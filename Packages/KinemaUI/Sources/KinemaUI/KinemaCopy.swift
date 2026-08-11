@@ -109,6 +109,7 @@ public enum KinemaCopy {
     // MARK: - Player
 
     public static let lineup = "Lineup"
+    public static let playlistMode = "Playback Mode"
     public static let preferences = "Preferences"
     public static let audio = "Audio"
     public static let chapters = "Chapters"
@@ -122,6 +123,8 @@ public enum KinemaCopy {
     public static let pictureZoomOut = "Zoom Out"
     public static let pictureRotate = "Rotate 90°"
     public static let pictureReset = "Reset Picture"
+    public static let videoFilters = "Filters"
+    public static let videoFiltersReset = "Reset Filters"
     public static let keyboardShortcuts = "Keyboard Shortcuts"
     public static let keyboardRecord = "Press a key…"
     public static let keyboardAddKey = "Add key"

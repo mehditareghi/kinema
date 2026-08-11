@@ -16,31 +16,43 @@ public struct PlaylistSheet: View {
     public var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(viewModel.session.playlist.enumerated()), id: \.element.id) { index, item in
-                    Button {
-                        Task {
-                            try? await viewModel.session.load(item)
-                            viewModel.session.play()
+                Section {
+                    Picker(KinemaCopy.playlistMode, selection: playlistModeBinding) {
+                        ForEach(PlaylistPlaybackMode.allCases) { mode in
+                            Label(mode.displayName, systemImage: mode.systemImage)
+                                .tag(mode)
                         }
-                        dismiss()
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(item.title).font(.headline)
-                                Text(item.url.lastPathComponent)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    }
+                    .pickerStyle(.inline)
+                }
+
+                Section {
+                    ForEach(Array(viewModel.session.playlist.enumerated()), id: \.element.id) { _, item in
+                        Button {
+                            Task {
+                                try? await viewModel.session.load(item)
+                                viewModel.session.play()
                             }
-                            Spacer()
-                            if viewModel.session.currentItem?.id == item.id {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .foregroundStyle(.tint)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(item.title).font(.headline)
+                                    Text(item.url.lastPathComponent)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if viewModel.session.currentItem?.id == item.id {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .foregroundStyle(.tint)
+                                }
                             }
                         }
                     }
-                }
-                .onMove { from, to in
-                    viewModel.session.movePlaylist(fromOffsets: from, toOffset: to)
+                    .onMove { from, to in
+                        viewModel.session.movePlaylist(fromOffsets: from, toOffset: to)
+                    }
                 }
             }
             .navigationTitle(KinemaCopy.lineup)
@@ -55,6 +67,16 @@ public struct PlaylistSheet: View {
                 #endif
             }
         }
+    }
+
+    private var playlistModeBinding: Binding<PlaylistPlaybackMode> {
+        Binding(
+            get: { viewModel.session.playlistMode },
+            set: { mode in
+                let message = viewModel.session.setPlaylistMode(mode)
+                viewModel.showOSD(message)
+            }
+        )
     }
 
     #if os(iOS) || os(macOS)

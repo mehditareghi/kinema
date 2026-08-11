@@ -36,6 +36,8 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var videoZoom: Double = 0
     /// Clockwise rotation in degrees (0 / 90 / 180 / 270).
     public private(set) var videoRotateDegrees: Int = 0
+    /// Lineup advance mode (off / repeat one / repeat all / shuffle).
+    public private(set) var playlistMode: PlaylistPlaybackMode = .off
     public private(set) var activeSubtitleTrackID: Int?
     public private(set) var activeSecondarySubtitleTrackID: Int?
 
@@ -116,6 +118,8 @@ public final class PlayerSession: PlaybackEngine {
     #endif
 
     private var playlistIndex = 0
+    /// Indices visited while shuffling — used for previous.
+    private var shuffleHistory: [Int] = []
     private var loadGeneration = 0
     private var pendingStartPosition: TimeInterval?
     private var isPrepared = false
@@ -139,6 +143,10 @@ public final class PlayerSession: PlaybackEngine {
 
     public init(resolver: MediaResolver = MediaResolverFactory.makeDefault()) {
         self.resolver = resolver
+        if let raw = UserDefaults.standard.string(forKey: Self.playlistModeKey),
+           let mode = PlaylistPlaybackMode(rawValue: raw) {
+            playlistMode = mode
+        }
     }
 
     public func prepare() throws {
@@ -159,6 +167,7 @@ public final class PlayerSession: PlaybackEngine {
         applyAudioPipeline()
         applyHDRToneMappingPreferences()
         restoreVideoDisplayPreferences()
+        applyVideoFilters()
         isPrepared = true
         #endif
     }
@@ -208,6 +217,7 @@ public final class PlayerSession: PlaybackEngine {
         applyAudioPipeline()
         applyHDRToneMappingPreferences()
         restoreVideoDisplayPreferences()
+        applyVideoFilters()
         isPrepared = true
     }
 
@@ -310,6 +320,7 @@ public final class PlayerSession: PlaybackEngine {
     public func setPlaylist(_ items: [MediaItem], startingAt first: MediaItem) {
         playlist = items
         playlistIndex = playlistIndex(for: first.url, in: items) ?? 0
+        shuffleHistory.removeAll()
     }
 
     private func playlistIndex(for url: URL, in items: [MediaItem]) -> Int? {
@@ -530,6 +541,13 @@ public final class PlayerSession: PlaybackEngine {
     public var hasABLoopB: Bool { abLoopB != nil }
     public var isABLooping: Bool { abLoopA != nil && abLoopB != nil }
 
+    /// Distinct from playlist `repeat` — reflects set-A / set-B / looping.
+    public var abLoopSystemImage: String {
+        if isABLooping { return "arrow.triangle.2.circlepath" }
+        if hasABLoopA { return "b.circle" }
+        return "a.circle"
+    }
+
     /// mpv-style cycle: set A → set B → clear.
     @discardableResult
     public func cycleABLoop() -> String {
@@ -612,7 +630,25 @@ public final class PlayerSession: PlaybackEngine {
     public func setSpeed(_ speed: Double) {
         controller.setSpeed(speed)
         PreferencesStore.shared.preferences.speed = speed
+        if let url = currentItem?.url {
+            MediaPlaybackPrefsStore.saveSpeed(speed, for: url)
+        }
         refreshInfo(force: true)
+    }
+
+    /// Per-title remembered speed, else last global preference.
+    private func applyRememberedSpeed(for item: MediaItem) {
+        let speed = MediaPlaybackPrefsStore.speed(for: item.url)
+            ?? PreferencesStore.shared.preferences.speed
+        controller.setSpeed(speed)
+        refreshInfo(force: true)
+    }
+
+    /// Per-title audio delay when known; otherwise leave engine default (0).
+    private func applyRememberedAudioDelay(for item: MediaItem) {
+        guard let delay = MediaPlaybackPrefsStore.audioDelay(for: item.url) else { return }
+        audioDelay = delay
+        controller.setAudioDelay(delay)
     }
 
     public func setMuted(_ muted: Bool) {
@@ -628,6 +664,11 @@ public final class PlayerSession: PlaybackEngine {
         controller.setReplayGain(prefs.replayGain.mpvValue)
         let device = prefs.audioOutputDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
         controller.setAudioDevice(device.isEmpty ? "auto" : device)
+    }
+
+    public func applyVideoFilters() {
+        guard isPrepared || controller.isReady else { return }
+        controller.applyVideoFilters(PreferencesStore.shared.videoFilters)
     }
 
     public func applyHDRToneMappingPreferences() {
@@ -724,11 +765,24 @@ public final class PlayerSession: PlaybackEngine {
     public func selectAudioTrack(id: Int?) {
         if let id {
             controller.selectTrack(id: id, kind: .audio)
-            let label = audioTracks.first(where: { $0.id == id }).map(Self.audioTrackLabel) ?? "Audio \(id)"
+            let track = audioTracks.first(where: { $0.id == id })
+            let label = track.map(Self.audioTrackLabel) ?? "Audio \(id)"
             controller.showOSD(label)
+            if let url = currentItem?.url, let track {
+                MediaPlaybackPrefsStore.saveAudioTrackKey(
+                    SubtitleSessionStore.trackKey(for: track, sourceURL: nil),
+                    for: url
+                )
+            }
         } else {
             controller.disableAudioTrack()
             controller.showOSD("Audio off")
+            if let url = currentItem?.url {
+                MediaPlaybackPrefsStore.saveAudioTrackKey(
+                    MediaPlaybackPrefsStore.audioTrackOffKey,
+                    for: url
+                )
+            }
         }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(200))
@@ -743,6 +797,12 @@ public final class PlayerSession: PlaybackEngine {
             refreshTracks(force: true)
             if let track = activeAudioTrack {
                 controller.showOSD(Self.audioTrackLabel(track))
+                if let url = currentItem?.url {
+                    MediaPlaybackPrefsStore.saveAudioTrackKey(
+                        SubtitleSessionStore.trackKey(for: track, sourceURL: nil),
+                        for: url
+                    )
+                }
             }
         }
     }
@@ -763,6 +823,9 @@ public final class PlayerSession: PlaybackEngine {
 
     public func addToPlaylist(_ items: [MediaItem]) {
         playlist.append(contentsOf: items)
+        if playlistMode == .shuffle {
+            shuffleHistory.removeAll()
+        }
     }
 
     public func playNextInPlaylist(_ items: [MediaItem]) {
@@ -779,13 +842,70 @@ public final class PlayerSession: PlaybackEngine {
     }
 
     public func playNext(startFromBeginning: Bool) {
-        guard playlistIndex + 1 < playlist.count else { return }
-        playPlaylistItem(at: playlistIndex + 1, startFromBeginning: startFromBeginning)
+        guard !playlist.isEmpty else { return }
+
+        switch playlistMode {
+        case .off, .one, .all:
+            if playlistIndex + 1 < playlist.count {
+                playPlaylistItem(at: playlistIndex + 1, startFromBeginning: startFromBeginning)
+            } else if playlistMode == .all {
+                playPlaylistItem(at: 0, startFromBeginning: true)
+            }
+        case .shuffle:
+            guard let next = nextShuffleIndex(excludingCurrent: true) else { return }
+            shuffleHistory.append(playlistIndex)
+            playPlaylistItem(at: next, startFromBeginning: startFromBeginning)
+        }
     }
 
     public func playPrevious() {
         guard !playlist.isEmpty else { return }
-        playPlaylistItem(at: max(playlistIndex - 1, 0), startFromBeginning: false)
+
+        switch playlistMode {
+        case .shuffle:
+            if let previous = shuffleHistory.popLast(), playlist.indices.contains(previous) {
+                playPlaylistItem(at: previous, startFromBeginning: false)
+            } else if let next = nextShuffleIndex(excludingCurrent: true) {
+                playPlaylistItem(at: next, startFromBeginning: false)
+            }
+        case .off, .one:
+            playPlaylistItem(at: max(playlistIndex - 1, 0), startFromBeginning: false)
+        case .all:
+            if playlistIndex > 0 {
+                playPlaylistItem(at: playlistIndex - 1, startFromBeginning: false)
+            } else {
+                playPlaylistItem(at: playlist.count - 1, startFromBeginning: false)
+            }
+        }
+    }
+
+    @discardableResult
+    public func setPlaylistMode(_ mode: PlaylistPlaybackMode) -> String {
+        playlistMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.playlistModeKey)
+        if mode != .shuffle {
+            shuffleHistory.removeAll()
+        }
+        return mode.displayName
+    }
+
+    @discardableResult
+    public func cyclePlaylistMode() -> String {
+        let all = PlaylistPlaybackMode.allCases
+        let next = all[((all.firstIndex(of: playlistMode) ?? 0) + 1) % all.count]
+        return setPlaylistMode(next)
+    }
+
+    private static let playlistModeKey = "kinema.playlistPlaybackMode"
+
+    private func nextShuffleIndex(excludingCurrent: Bool) -> Int? {
+        guard !playlist.isEmpty else { return nil }
+        if playlist.count == 1 { return 0 }
+        var candidates = Array(playlist.indices)
+        if excludingCurrent {
+            candidates.removeAll { $0 == playlistIndex }
+        }
+        return candidates.randomElement()
     }
 
     /// Peek the upcoming Up Next title when a credits card would apply (thumbnail warm-up).
@@ -880,6 +1000,7 @@ public final class PlayerSession: PlaybackEngine {
     private func considerCreditsUpNextOffer() {
         guard upNextOffer == nil else { return }
         guard state == .playing else { return }
+        guard playlistMode != .one, playlistMode != .shuffle else { return }
         guard PreferencesStore.shared.preferences.seriesUpNextEnabled else { return }
         guard let current = currentItem else { return }
         let mediaID = WatchProgressStore.mediaID(for: current.url)
@@ -1248,6 +1369,11 @@ public final class PlayerSession: PlaybackEngine {
     public func setAudioDelay(_ delay: Double) {
         audioDelay = delay
         controller.setAudioDelay(delay)
+        if let url = currentItem?.url {
+            MediaPlaybackPrefsStore.saveAudioDelay(delay, for: url)
+        }
+        // Keep subtitle-session snapshot in sync (also carries audioDelay).
+        persistSubtitleSession()
         controller.showOSD(String(format: "Audio delay: %+.2fs", delay))
     }
 
@@ -1401,8 +1527,14 @@ public final class PlayerSession: PlaybackEngine {
         syncTarget = SubtitleSyncTarget(rawValue: state.syncTarget) ?? .primary
         subtitleDelay = state.primaryDelay
         secondarySubtitleDelay = state.secondaryDelay
-        audioDelay = state.audioDelay
-        controller.setAudioDelay(state.audioDelay)
+        // Prefer dedicated audio-delay prefs; fall back to legacy session field.
+        let storedDelay = MediaPlaybackPrefsStore.audioDelay(for: item.url)
+        let rememberedDelay = storedDelay ?? state.audioDelay
+        audioDelay = rememberedDelay
+        controller.setAudioDelay(rememberedDelay)
+        if storedDelay == nil, state.audioDelay != 0 {
+            MediaPlaybackPrefsStore.saveAudioDelay(state.audioDelay, for: item.url)
+        }
 
         await restoreRememberedSubtitlesOnly(for: item)
         refreshTracks(force: true)
@@ -1587,8 +1719,13 @@ public final class PlayerSession: PlaybackEngine {
                     refreshChapters(force: true)
                     applyLiveSubtitlePreferences()
                     applyAudioPipeline()
-                    applyPreferredAudioLanguage()
+                    if !applyRememberedAudioTrack(for: item) {
+                        applyPreferredAudioLanguage()
+                    }
                     applyVideoDisplay()
+                    applyVideoFilters()
+                    applyRememberedSpeed(for: item)
+                    applyRememberedAudioDelay(for: item)
                     refreshHDRContentFlag()
                     await restoreSubtitleSession(for: item)
                 }
@@ -1608,6 +1745,46 @@ public final class PlayerSession: PlaybackEngine {
                 handlePlaybackFinished()
             }
         }
+    }
+
+    /// Restores a previously chosen audio track. Returns false so language preference can run.
+    @discardableResult
+    private func applyRememberedAudioTrack(for item: MediaItem) -> Bool {
+        guard let key = MediaPlaybackPrefsStore.audioTrackKey(for: item.url) else { return false }
+
+        if key == MediaPlaybackPrefsStore.audioTrackOffKey {
+            controller.disableAudioTrack()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                refreshTracks(force: true)
+            }
+            return true
+        }
+
+        guard let trackID = resolveAudioTrackID(forKey: key) else { return false }
+        if activeAudioTrack?.id != trackID {
+            controller.selectTrack(id: trackID, kind: .audio)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                refreshTracks(force: true)
+            }
+        }
+        return true
+    }
+
+    private func resolveAudioTrackID(forKey key: String) -> Int? {
+        refreshTracks(force: true)
+        if let track = audioTracks.first(where: {
+            SubtitleSessionStore.trackKey(for: $0, sourceURL: nil) == key
+        }) {
+            return track.id
+        }
+        let parts = key.split(separator: ":").map(String.init)
+        if parts.count >= 2, parts[0] == "embedded", let ff = Int(parts[1]),
+           let track = audioTracks.first(where: { $0.ffIndex == ff }) {
+            return track.id
+        }
+        return nil
     }
 
     private func applyPreferredAudioLanguage() {
@@ -1774,7 +1951,17 @@ public final class PlayerSession: PlaybackEngine {
             return
         }
 
-        if let candidate = nextUpNextCandidate() {
+        // Repeat One — restart this title without leaving the player.
+        if playlistMode == .one {
+            controller.seek(to: 0)
+            play()
+            startPositionUpdates()
+            refreshInfo(force: true)
+            return
+        }
+
+        // Series Up Next stays available unless shuffle is intentional randomness.
+        if playlistMode != .shuffle, let candidate = nextUpNextCandidate() {
             if presentUpNextIfPossible() {
                 controller.pause()
                 state = .paused
@@ -1784,13 +1971,44 @@ public final class PlayerSession: PlaybackEngine {
                 return
             }
 
-            // Pref off / suppressed — still advance to the part-aware next candidate.
             state = .loading
             EventBus.shared.emit(.stateChanged(state))
             playPlaylistItem(at: candidate.playlistIndex, startFromBeginning: true)
-        } else {
-            state = .idle
-            EventBus.shared.emit(.playlistEnded)
+            return
+        }
+
+        switch playlistMode {
+        case .off:
+            if playlistIndex + 1 < playlist.count {
+                state = .loading
+                EventBus.shared.emit(.stateChanged(state))
+                playPlaylistItem(at: playlistIndex + 1, startFromBeginning: true)
+            } else {
+                state = .idle
+                EventBus.shared.emit(.playlistEnded)
+            }
+        case .all:
+            guard !playlist.isEmpty else {
+                state = .idle
+                EventBus.shared.emit(.playlistEnded)
+                return
+            }
+            let next = (playlistIndex + 1) % playlist.count
+            state = .loading
+            EventBus.shared.emit(.stateChanged(state))
+            playPlaylistItem(at: next, startFromBeginning: true)
+        case .shuffle:
+            guard let next = nextShuffleIndex(excludingCurrent: true) else {
+                state = .idle
+                EventBus.shared.emit(.playlistEnded)
+                return
+            }
+            shuffleHistory.append(playlistIndex)
+            state = .loading
+            EventBus.shared.emit(.stateChanged(state))
+            playPlaylistItem(at: next, startFromBeginning: true)
+        case .one:
+            break
         }
     }
 

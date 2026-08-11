@@ -143,6 +143,8 @@ public struct KinemaPreferences: Sendable {
     public var isMuted: Bool
     public var speed: Double
     public var resumePlayback: Bool
+    /// ±seek amount for chrome, double-tap, keyboard, and system remotes.
+    public var seekStep: SeekStep
     /// Offer a cinematic Up Next card between series episodes in a lineup.
     public var seriesUpNextEnabled: Bool
     public var autoLoadSubtitles: Bool
@@ -210,6 +212,7 @@ public struct KinemaPreferences: Sendable {
         isMuted: Bool = false,
         speed: Double = 1,
         resumePlayback: Bool = true,
+        seekStep: SeekStep = .default,
         seriesUpNextEnabled: Bool = true,
         autoLoadSubtitles: Bool = true,
         subtitleFontSize: Int = 55,
@@ -269,6 +272,7 @@ public struct KinemaPreferences: Sendable {
         self.isMuted = isMuted
         self.speed = speed
         self.resumePlayback = resumePlayback
+        self.seekStep = SeekStep.normalized(seekStep.rawValue)
         self.seriesUpNextEnabled = seriesUpNextEnabled
         self.autoLoadSubtitles = autoLoadSubtitles
         self.subtitleFontSize = subtitleFontSize
@@ -337,6 +341,7 @@ public final class PreferencesStore {
         static let isMuted = "kinema.isMuted"
         static let speed = "kinema.speed"
         static let resumePlayback = "kinema.resumePlayback"
+        static let seekStep = "kinema.seekStep"
         static let seriesUpNextEnabled = "kinema.seriesUpNextEnabled"
         static let autoLoadSubtitles = "kinema.autoLoadSubtitles"
         static let subtitleFontSize = "kinema.subtitleFontSize"
@@ -412,6 +417,7 @@ public final class PreferencesStore {
             isMuted: defaults.object(forKey: Keys.isMuted) as? Bool ?? false,
             speed: defaults.object(forKey: Keys.speed) as? Double ?? 1,
             resumePlayback: defaults.object(forKey: Keys.resumePlayback) as? Bool ?? true,
+            seekStep: SeekStep.normalized(defaults.object(forKey: Keys.seekStep) as? Int ?? SeekStep.default.rawValue),
             seriesUpNextEnabled: defaults.object(forKey: Keys.seriesUpNextEnabled) as? Bool ?? true,
             autoLoadSubtitles: defaults.object(forKey: Keys.autoLoadSubtitles) as? Bool ?? true,
             subtitleFontSize: defaults.object(forKey: Keys.subtitleFontSize) as? Int ?? 55,
@@ -474,6 +480,7 @@ public final class PreferencesStore {
         defaults.set(preferences.isMuted, forKey: Keys.isMuted)
         defaults.set(preferences.speed, forKey: Keys.speed)
         defaults.set(preferences.resumePlayback, forKey: Keys.resumePlayback)
+        defaults.set(preferences.seekStep.rawValue, forKey: Keys.seekStep)
         defaults.set(preferences.seriesUpNextEnabled, forKey: Keys.seriesUpNextEnabled)
         defaults.set(preferences.autoLoadSubtitles, forKey: Keys.autoLoadSubtitles)
         defaults.set(preferences.subtitleFontSize, forKey: Keys.subtitleFontSize)

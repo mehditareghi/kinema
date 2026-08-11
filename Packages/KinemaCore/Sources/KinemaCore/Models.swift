@@ -255,6 +255,30 @@ public struct Chapter: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Fixed ±seek increment for chrome buttons, double-tap, keys, and remotes.
+public enum SeekStep: Int, Codable, Sendable, CaseIterable, Identifiable {
+    case five = 5
+    case ten = 10
+    case fifteen = 15
+    case thirty = 30
+
+    public var id: Int { rawValue }
+
+    public var displayName: String { "\(rawValue)s" }
+
+    public var seconds: TimeInterval { TimeInterval(rawValue) }
+
+    public var backwardSystemImage: String { "gobackward.\(rawValue)" }
+
+    public var forwardSystemImage: String { "goforward.\(rawValue)" }
+
+    public static let `default`: SeekStep = .ten
+
+    public static func normalized(_ value: Int) -> SeekStep {
+        SeekStep(rawValue: value) ?? .default
+    }
+}
+
 /// How the video plane maps into the player window (mpv pan/scan + aspect).
 public enum VideoFitMode: String, Codable, Sendable, CaseIterable, Identifiable {
     case fit

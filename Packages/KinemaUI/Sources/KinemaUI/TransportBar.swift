@@ -144,9 +144,11 @@ public struct TransportBar: View {
             transportButton("backward.end.fill", label: "Previous") {
                 viewModel.session.playPrevious()
             }
-            transportButton("gobackward.10", label: "Back 10 seconds") {
-                viewModel.session.seekRelative(-10)
-                viewModel.showOSD("-10s")
+            transportButton(
+                PreferencesStore.shared.preferences.seekStep.backwardSystemImage,
+                label: "Back \(PreferencesStore.shared.preferences.seekStep.displayName)"
+            ) {
+                viewModel.seekByConfiguredStep(forward: false)
             }
 
             Button {
@@ -162,9 +164,11 @@ public struct TransportBar: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 6)
 
-            transportButton("goforward.10", label: "Forward 10 seconds") {
-                viewModel.session.seekRelative(10)
-                viewModel.showOSD("+10s")
+            transportButton(
+                PreferencesStore.shared.preferences.seekStep.forwardSystemImage,
+                label: "Forward \(PreferencesStore.shared.preferences.seekStep.displayName)"
+            ) {
+                viewModel.seekByConfiguredStep(forward: true)
             }
             transportButton("forward.end.fill", label: "Next") {
                 viewModel.session.playNext()

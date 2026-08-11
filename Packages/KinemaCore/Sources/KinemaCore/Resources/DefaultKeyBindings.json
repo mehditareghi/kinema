@@ -7,12 +7,12 @@
   {
     "action": "seek-back-5",
     "keys": ["left", "j"],
-    "description": "Seek back 5 seconds"
+    "description": "Seek back (step)"
   },
   {
     "action": "seek-forward-5",
     "keys": ["right", "l"],
-    "description": "Seek forward 5 seconds"
+    "description": "Seek forward (step)"
   },
   {
     "action": "pause",

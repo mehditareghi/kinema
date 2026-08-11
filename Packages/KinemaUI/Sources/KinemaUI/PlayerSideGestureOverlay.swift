@@ -128,13 +128,7 @@ struct PlayerSideGestureOverlay: View {
                 pendingSingleTap = nil
                 lastDoubleTapAt = Date()
                 let left = event.location.x < width / 2
-                if left {
-                    viewModel.session.seekRelative(-10)
-                    viewModel.showOSD("-10s")
-                } else {
-                    viewModel.session.seekRelative(10)
-                    viewModel.showOSD("+10s")
-                }
+                viewModel.seekByConfiguredStep(forward: !left)
             }
     }
 

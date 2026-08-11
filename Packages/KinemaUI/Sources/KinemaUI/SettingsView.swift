@@ -59,6 +59,20 @@ public struct SettingsView: View {
                     subtitle: KinemaCopy.upNextSettingsSubtitle,
                     isOn: binding(\.seriesUpNextEnabled)
                 )
+                SettingsMenuRow(
+                    title: KinemaCopy.seekStep,
+                    value: preferences.preferences.seekStep.displayName
+                ) {
+                    ForEach(SeekStep.allCases) { step in
+                        Button(step.displayName) {
+                            preferences.preferences.seekStep = step
+                            NowPlayingController.shared.refreshSkipIntervals()
+                        }
+                    }
+                }
+                Text("Applies to seek buttons, double-tap, keyboard arrows, and Lock Screen skip.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 SettingsSliderRow(title: "Default volume", valueText: "\(Int(preferences.preferences.volume))%", value: Binding(
                     get: { preferences.preferences.volume },
                     set: { PlayerSessionPool.sharedSession().setVolume($0) }

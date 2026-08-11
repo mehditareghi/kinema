@@ -259,14 +259,12 @@ public struct PlayerControlsOverlay: View {
             }
 
             glassCircleButton(size: 40) {
-                viewModel.session.seekRelative(-10)
-                viewModel.showOSD("-10s")
-                viewModel.scheduleHideControls()
+                viewModel.seekByConfiguredStep(forward: false)
             } label: {
-                Image(systemName: "gobackward.10")
+                Image(systemName: PreferencesStore.shared.preferences.seekStep.backwardSystemImage)
                     .font(.system(size: 17, weight: .medium))
             }
-            .accessibilityLabel("Back 10 seconds")
+            .accessibilityLabel("Back \(PreferencesStore.shared.preferences.seekStep.displayName)")
 
             glassCircleButton(size: 52) {
                 viewModel.session.togglePlayPause()
@@ -279,14 +277,12 @@ public struct PlayerControlsOverlay: View {
             .accessibilityLabel(viewModel.session.info.isPaused ? "Play" : "Pause")
 
             glassCircleButton(size: 40) {
-                viewModel.session.seekRelative(10)
-                viewModel.showOSD("+10s")
-                viewModel.scheduleHideControls()
+                viewModel.seekByConfiguredStep(forward: true)
             } label: {
-                Image(systemName: "goforward.10")
+                Image(systemName: PreferencesStore.shared.preferences.seekStep.forwardSystemImage)
                     .font(.system(size: 17, weight: .medium))
             }
-            .accessibilityLabel("Forward 10 seconds")
+            .accessibilityLabel("Forward \(PreferencesStore.shared.preferences.seekStep.displayName)")
 
             if viewModel.session.hasChapters {
                 glassCircleButton(size: 36) {

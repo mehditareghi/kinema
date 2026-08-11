@@ -216,8 +216,12 @@ public final class PlayerViewModel {
         guard let binding = KeyBindingStore.shared.bindingMatchingKey(key) else { return }
         switch binding.action {
         case "play-pause": session.togglePlayPause()
-        case "seek-back-5": session.seekRelative(-5)
-        case "seek-forward-5": session.seekRelative(5)
+        case "seek-back-5":
+            seekByConfiguredStep(forward: false)
+            return
+        case "seek-forward-5":
+            seekByConfiguredStep(forward: true)
+            return
         case "pause": session.pause()
         case "volume-up": session.setVolume(min(KinemaPreferences.volumeMax, session.info.volume + 5))
         case "volume-down": session.setVolume(max(0, session.info.volume - 5))
@@ -256,6 +260,14 @@ public final class PlayerViewModel {
         default: break
         }
         showOSD(binding.description)
+        scheduleHideControls()
+    }
+
+    /// Applies Preferences seek step to chrome / keys / double-tap.
+    public func seekByConfiguredStep(forward: Bool) {
+        let step = PreferencesStore.shared.preferences.seekStep
+        session.seekRelative(forward ? step.seconds : -step.seconds)
+        showOSD(forward ? "+\(step.displayName)" : "-\(step.displayName)")
         scheduleHideControls()
     }
 

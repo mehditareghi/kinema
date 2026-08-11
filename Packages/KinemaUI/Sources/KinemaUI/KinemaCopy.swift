@@ -110,6 +110,7 @@ public enum KinemaCopy {
 
     public static let lineup = "Lineup"
     public static let playlistMode = "Playback Mode"
+    public static let seekStep = "Seek Step"
     public static let preferences = "Preferences"
     public static let audio = "Audio"
     public static let chapters = "Chapters"

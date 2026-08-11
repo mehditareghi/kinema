@@ -29,17 +29,25 @@ final class NowPlayingController {
     private var lastPublishedArtist: String = ""
     private var lastPublishedAlbum: String = ""
 
-    private let seekStep: TimeInterval = 10
-
     private init() {}
 
     func attach(session: PlayerSession) {
         self.session = session
         configureRemoteCommandsIfNeeded()
+        refreshSkipIntervals()
+    }
+
+    /// Keep Lock Screen / Control Center skip intervals aligned with Preferences.
+    func refreshSkipIntervals() {
+        let center = MPRemoteCommandCenter.shared()
+        let step = PreferencesStore.shared.preferences.seekStep.seconds
+        center.skipForwardCommand.preferredIntervals = [NSNumber(value: step)]
+        center.skipBackwardCommand.preferredIntervals = [NSNumber(value: step)]
     }
 
     func activate(for item: MediaItem) {
         configureRemoteCommandsIfNeeded()
+        refreshSkipIntervals()
         isActive = true
         setRemoteCommandsEnabled(true)
         activateAudioSessionIfNeeded()
@@ -281,13 +289,17 @@ final class NowPlayingController {
         center.togglePlayPauseCommand.addTarget { [weak self] _ in
             self?.performOnSession { $0.togglePlayPause() } ?? .commandFailed
         }
-        center.skipForwardCommand.preferredIntervals = [NSNumber(value: seekStep)]
-        center.skipForwardCommand.addTarget { [weak self] _ in
-            self?.performOnSession { $0.seekRelative(10) } ?? .commandFailed
+        center.skipForwardCommand.preferredIntervals = [NSNumber(value: PreferencesStore.shared.preferences.seekStep.seconds)]
+        center.skipForwardCommand.addTarget { [weak self] event in
+            let interval = (event as? MPSkipIntervalCommandEvent)?.interval
+                ?? PreferencesStore.shared.preferences.seekStep.seconds
+            return self?.performOnSession { $0.seekRelative(interval) } ?? .commandFailed
         }
-        center.skipBackwardCommand.preferredIntervals = [NSNumber(value: seekStep)]
-        center.skipBackwardCommand.addTarget { [weak self] _ in
-            self?.performOnSession { $0.seekRelative(-10) } ?? .commandFailed
+        center.skipBackwardCommand.preferredIntervals = [NSNumber(value: PreferencesStore.shared.preferences.seekStep.seconds)]
+        center.skipBackwardCommand.addTarget { [weak self] event in
+            let interval = (event as? MPSkipIntervalCommandEvent)?.interval
+                ?? PreferencesStore.shared.preferences.seekStep.seconds
+            return self?.performOnSession { $0.seekRelative(-interval) } ?? .commandFailed
         }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let self,

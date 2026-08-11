@@ -16,8 +16,8 @@ public struct KeyBinding: Codable, Sendable, Identifiable, Hashable {
 public enum KeyBindingDefaults {
     public static let bindings: [KeyBinding] = [
         KeyBinding(action: "play-pause", keys: ["space"], description: "Play / Pause"),
-        KeyBinding(action: "seek-back-5", keys: ["left", "j"], description: "Seek back 5 seconds"),
-        KeyBinding(action: "seek-forward-5", keys: ["right", "l"], description: "Seek forward 5 seconds"),
+        KeyBinding(action: "seek-back-5", keys: ["left", "j"], description: "Seek back (step)"),
+        KeyBinding(action: "seek-forward-5", keys: ["right", "l"], description: "Seek forward (step)"),
         KeyBinding(action: "pause", keys: ["k"], description: "Pause"),
         KeyBinding(action: "volume-up", keys: ["up"], description: "Volume up"),
         KeyBinding(action: "volume-down", keys: ["down"], description: "Volume down"),

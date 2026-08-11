@@ -107,8 +107,8 @@ Defaults (customize in **Preferences → Keyboard Shortcuts**):
 | Key | Action |
 |-----|--------|
 | Space | Play / Pause |
-| ← / J | Seek back 5s |
-| → / L | Seek forward 5s |
+| ← / J | Seek back (step) |
+| → / L | Seek forward (step) |
 | K | Pause |
 | F | Toggle fullscreen |
 | M | Mute |
@@ -118,6 +118,8 @@ Defaults (customize in **Preferences → Keyboard Shortcuts**):
 | B | A–B loop (set A / set B / clear) |
 | A / V | Cycle audio / subtitles |
 | G / H | Subtitle delay −/+ 0.1s |
+
+Seek step (5 / 10 / 15 / 30s) is set in **Preferences → Seek Step**.
 
 ## Regenerating mpv Bindings
 

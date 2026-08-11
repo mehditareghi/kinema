@@ -137,8 +137,9 @@ public struct PlayerView: View {
                     return .handled
                 }
             }
-            guard viewModel.handlesKey(press.characters) else { return .ignored }
-            viewModel.handleKey(press.characters)
+            guard let token = Self.keyToken(from: press) else { return .ignored }
+            guard viewModel.handlesKey(token) else { return .ignored }
+            viewModel.handleKey(token)
             return .handled
         }
         #endif
@@ -177,6 +178,25 @@ public struct PlayerView: View {
             .allowsHitTesting(!viewModel.showControls && viewModel.upNextOffer == nil)
         #endif
     }
+
+    #if os(macOS)
+    private static func keyToken(from press: KeyPress) -> String? {
+        switch press.key {
+        case .space: return "space"
+        case .leftArrow: return "left"
+        case .rightArrow: return "right"
+        case .upArrow: return "up"
+        case .downArrow: return "down"
+        case .return: return "return"
+        case .escape: return "escape"
+        case .tab: return "tab"
+        case .delete: return "delete"
+        case .deleteForward: return "forwarddelete"
+        default:
+            return KeyBindingNormalizer.normalizeToken(press.characters)
+        }
+    }
+    #endif
 }
 
 public struct RootView: View {

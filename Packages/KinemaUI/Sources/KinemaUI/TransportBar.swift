@@ -8,6 +8,7 @@ public struct TransportBar: View {
     let accent: Color
     @State private var scrubPosition: Double = 0
     @State private var isScrubbing = false
+    @State private var scrubLoader = ScrubFrameLoader()
 
     private let maxBarWidth: CGFloat = 560
 
@@ -65,16 +66,60 @@ public struct TransportBar: View {
                     isScrubbing = editing
                     if editing {
                         viewModel.cancelAutoHideControls()
+                        scrubLoader.bind(
+                            url: viewModel.session.scrubMediaURL,
+                            duration: max(viewModel.session.info.duration, 1)
+                        )
+                        scrubLoader.request(time: scrubPosition)
                     } else {
                         viewModel.session.seek(to: scrubPosition)
                         viewModel.scheduleHideControls()
+                        scrubLoader.endSession()
                     }
                 }
                 .tint(accent)
             }
+            .overlay {
+                GeometryReader { geo in
+                    if isScrubbing {
+                        let duration = max(viewModel.session.info.duration, 1)
+                        let fraction = scrubPosition / duration
+                        let thumbX = ScrubThumbGeometry.thumbCenterX(fraction: fraction, in: geo.size.width)
+                        let bubbleX = ScrubThumbGeometry.bubbleCenterX(
+                            thumbX: thumbX,
+                            bubbleWidth: ScrubPreviewBubble.previewWidth,
+                            in: geo.size.width
+                        )
+                        ScrubPreviewBubble(
+                            image: scrubLoader.image,
+                            time: scrubPosition,
+                            accent: accent
+                        )
+                        .position(x: bubbleX, y: -58)
+                        .allowsHitTesting(false)
+                    }
+                }
+            }
+            .onChange(of: scrubPosition) { _, value in
+                if isScrubbing {
+                    scrubLoader.request(time: value)
+                }
+            }
+            .onChange(of: viewModel.session.scrubMediaURL) { _, url in
+                scrubLoader.bind(
+                    url: url,
+                    duration: max(viewModel.session.info.duration, 1)
+                )
+            }
+            .onAppear {
+                scrubLoader.bind(
+                    url: viewModel.session.scrubMediaURL,
+                    duration: max(viewModel.session.info.duration, 1)
+                )
+            }
 
             HStack {
-                Text(formatTime(viewModel.session.info.position))
+                Text(formatTime(isScrubbing ? scrubPosition : viewModel.session.info.position))
                     .font(.caption2.monospacedDigit())
                 Spacer()
                 if viewModel.session.isABLooping {

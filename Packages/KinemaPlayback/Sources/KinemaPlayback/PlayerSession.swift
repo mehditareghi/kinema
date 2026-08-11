@@ -16,6 +16,14 @@ public final class PlayerSession: PlaybackEngine {
     public private(set) var chapters: [Chapter] = []
     /// End-of-episode series offer (credits lead-in or EOF).
     public private(set) var upNextOffer: UpNextOffer?
+    /// Prefer this for side extractors (sandbox copy on iOS when applicable).
+    public var scrubMediaURL: URL? {
+        #if os(iOS) || os(tvOS)
+        activePlaybackURL ?? currentItem?.url
+        #else
+        currentItem?.url
+        #endif
+    }
     /// A–B loop start; `nil` means unset (`ab-loop-a=no`).
     public private(set) var abLoopA: TimeInterval?
     /// A–B loop end; `nil` means unset (`ab-loop-b=no`).

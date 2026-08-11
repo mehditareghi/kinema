@@ -209,8 +209,7 @@ public final class PlayerViewModel {
     }
 
     public func handleKey(_ key: String) {
-        let bindings = KeyBindingDefaults.load()
-        guard let binding = bindings.first(where: { $0.keys.contains(key) }) else { return }
+        guard let binding = KeyBindingStore.shared.bindingMatchingKey(key) else { return }
         switch binding.action {
         case "play-pause": session.togglePlayPause()
         case "seek-back-5": session.seekRelative(-5)
@@ -263,7 +262,7 @@ public final class PlayerViewModel {
     #endif
 
     public func handlesKey(_ key: String) -> Bool {
-        KeyBindingDefaults.load().contains { $0.keys.contains(key) }
+        KeyBindingStore.shared.handlesKey(key)
     }
 
     private func handleEvent(_ event: KinemaEvent) {

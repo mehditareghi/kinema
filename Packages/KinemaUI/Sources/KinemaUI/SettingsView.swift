@@ -267,20 +267,7 @@ public struct SettingsView: View {
             WiFiSharingSettingsCard()
 
             KinemaCard(title: "Keyboard Shortcuts", icon: "keyboard") {
-                ForEach(KeyBindingDefaults.load()) { keyBinding in
-                    HStack {
-                        Text(keyBinding.description)
-                            .font(.subheadline)
-                        Spacer()
-                        Text(keyBinding.keys.joined(separator: " · "))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.primary.opacity(0.06))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                }
+                KeyBindingsSettingsSection()
             }
 
             KinemaCard(title: "About", icon: "info.circle") {
@@ -649,3 +636,210 @@ private extension Color {
         self = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
 }
+
+// MARK: - Keybindings editor
+
+private struct KeyBindingsSettingsSection: View {
+    @Bindable private var store = KeyBindingStore.shared
+    @State private var recordingAction: String?
+    @FocusState private var focusRecording: Bool
+    @State private var statusMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            #if os(macOS)
+            Text("Click Add key, then press a key. Conflicting shortcuts move off the other action.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(KinemaTheme.accent)
+            }
+            #endif
+
+            ForEach(store.bindings) { binding in
+                KeyBindingEditorRow(
+                    binding: binding,
+                    isRecording: recordingAction == binding.action,
+                    isCustomized: store.isCustomized(binding.action),
+                    onStartRecording: {
+                        recordingAction = binding.action
+                        focusRecording = true
+                        statusMessage = nil
+                    },
+                    onCancelRecording: {
+                        recordingAction = nil
+                        focusRecording = false
+                    },
+                    onRemoveKey: { key in
+                        store.removeKey(key, from: binding.action)
+                        statusMessage = nil
+                    },
+                    onReset: {
+                        store.reset(binding.action)
+                        if recordingAction == binding.action {
+                            recordingAction = nil
+                            focusRecording = false
+                        }
+                        statusMessage = nil
+                    }
+                )
+            }
+
+            #if os(macOS)
+            if store.hasOverrides {
+                Button(KinemaCopy.keyboardResetAll) {
+                    store.resetAll()
+                    recordingAction = nil
+                    focusRecording = false
+                    statusMessage = nil
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+            }
+
+            // Invisible focus target that receives the next key while recording.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .focusable(recordingAction != nil)
+                .focused($focusRecording)
+                .onKeyPress { press in
+                    guard let action = recordingAction else { return .ignored }
+                    if press.key == .escape {
+                        recordingAction = nil
+                        focusRecording = false
+                        return .handled
+                    }
+                    guard let token = Self.token(from: press) else { return .ignored }
+                    let stolen = store.addKey(token, to: action)
+                    if !stolen.isEmpty {
+                        let names = stolen.map(\.description).joined(separator: ", ")
+                        statusMessage = "\(KinemaCopy.keyboardConflictPrefix) \(names)"
+                    } else {
+                        statusMessage = nil
+                    }
+                    recordingAction = nil
+                    focusRecording = false
+                    return .handled
+                }
+            #endif
+        }
+    }
+
+    #if os(macOS)
+    private static func token(from press: KeyPress) -> String? {
+        switch press.key {
+        case .space: return "space"
+        case .leftArrow: return "left"
+        case .rightArrow: return "right"
+        case .upArrow: return "up"
+        case .downArrow: return "down"
+        case .return: return "return"
+        case .escape: return "escape"
+        case .tab: return "tab"
+        case .delete: return "delete"
+        case .deleteForward: return "forwarddelete"
+        default:
+            return KeyBindingNormalizer.normalizeToken(press.characters)
+        }
+    }
+    #endif
+}
+
+private struct KeyBindingEditorRow: View {
+    let binding: KeyBinding
+    let isRecording: Bool
+    let isCustomized: Bool
+    let onStartRecording: () -> Void
+    let onCancelRecording: () -> Void
+    let onRemoveKey: (String) -> Void
+    let onReset: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(binding.description)
+                    .font(.subheadline)
+                if isCustomized {
+                    Text("Custom")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(KinemaTheme.accent)
+                }
+                Spacer(minLength: 8)
+                #if os(macOS)
+                if isCustomized {
+                    Button(KinemaCopy.keyboardReset, action: onReset)
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                #endif
+            }
+
+            HStack(spacing: 6) {
+                ForEach(binding.keys, id: \.self) { key in
+                    #if os(macOS)
+                    Button {
+                        onRemoveKey(key)
+                    } label: {
+                        keyChipLabel(KeyBindingNormalizer.displayName(for: key), showRemove: true)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove \(KeyBindingNormalizer.displayName(for: key))")
+                    #else
+                    keyChipLabel(KeyBindingNormalizer.displayName(for: key), showRemove: false)
+                    #endif
+                }
+
+                #if os(macOS)
+                if isRecording {
+                    Button(action: onCancelRecording) {
+                        keyChipLabel(KinemaCopy.keyboardRecord, showRemove: false, accented: true)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: onStartRecording) {
+                        Text(KinemaCopy.keyboardAddKey)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(KinemaTheme.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(KinemaTheme.accent.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                #elseif os(iOS) || os(tvOS)
+                if binding.keys.isEmpty {
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                #endif
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func keyChipLabel(_ title: String, showRemove: Bool, accented: Bool = false) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.caption.monospaced())
+            if showRemove {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .opacity(0.55)
+            }
+        }
+        .foregroundStyle(accented ? KinemaTheme.accent : .secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            (accented ? KinemaTheme.accent.opacity(0.14) : Color.primary.opacity(0.06)),
+            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+        )
+    }
+}
+

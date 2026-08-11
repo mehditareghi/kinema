@@ -52,6 +52,16 @@ public enum MediaArtworkService {
         return await ThumbnailPipeline.shared.loadPreview(for: url, at: time, priority: priority)
     }
 
+    /// Single-frame extract for scrubber previews — reuses a warm demuxer/decoder.
+    public static func extractScrubFrame(from url: URL, at time: TimeInterval) async -> CGImage? {
+        await ScrubFrameExtractor.shared.frame(at: time, url: url)
+    }
+
+    /// Lightweight RGBA convert used by the scrub extractor (smaller than library thumbs).
+    static func makeScrubCGImage(from frame: AVFrame) -> CGImage? {
+        makeCGImage(from: frame, maxWidth: 240, flags: .fastBilinear)
+    }
+
     static func extractPreview(from url: URL, at time: TimeInterval) -> MediaPreview {
         // Skip stubs / in-progress USB copies — probing them is expensive and can
         // conflict with Finder’s AFC writer (device disconnects mid-transfer).
@@ -439,11 +449,14 @@ public enum MediaArtworkService {
         return bestImage
     }
 
-    private static func makeCGImage(from frame: AVFrame) -> CGImage? {
+    private static func makeCGImage(
+        from frame: AVFrame,
+        maxWidth: Int = 480,
+        flags: SwsContext.Flag = .bicubic
+    ) -> CGImage? {
         let source = softwareFrame(from: frame) ?? frame
         guard source.width > 0, source.height > 0, source.pixelFormat != .none else { return nil }
 
-        let maxWidth = 480
         let dstWidth = min(source.width, maxWidth)
         let dstHeight = max(1, Int(Double(dstWidth) * Double(source.height) / Double(source.width)))
 
@@ -454,7 +467,7 @@ public enum MediaArtworkService {
             dstWidth: dstWidth,
             dstHeight: dstHeight,
             dstPixelFormat: .RGBA,
-            flags: .bicubic
+            flags: flags
         ) else {
             return nil
         }

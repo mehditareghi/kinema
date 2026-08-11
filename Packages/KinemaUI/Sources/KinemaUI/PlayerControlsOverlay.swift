@@ -147,6 +147,7 @@ public struct PlayerControlsOverlay: View {
             PlayerProgressSlider(
                 position: $scrubPosition,
                 duration: duration,
+                mediaURL: viewModel.session.scrubMediaURL,
                 chapters: viewModel.session.chapters,
                 abLoopA: viewModel.session.abLoopA,
                 abLoopB: viewModel.session.abLoopB,
@@ -335,6 +336,7 @@ public struct PlayerControlsOverlay: View {
 private struct PlayerProgressSlider: View {
     @Binding var position: Double
     let duration: Double
+    let mediaURL: URL?
     let chapters: [Chapter]
     let abLoopA: TimeInterval?
     let abLoopB: TimeInterval?
@@ -345,57 +347,127 @@ private struct PlayerProgressSlider: View {
     let onScrubEnd: (Double) -> Void
 
     @State private var localPosition: Double = 0
+    @State private var loader = ScrubFrameLoader()
+    #if os(macOS)
+    @State private var hoverTime: TimeInterval?
+    #endif
 
-    private var progress: Double {
-        guard duration > 0 else { return 0 }
-        return min(1, max(0, localPosition / duration))
+    private var previewTime: TimeInterval? {
+        #if os(macOS)
+        if isScrubbing { return localPosition }
+        return hoverTime
+        #else
+        return isScrubbing ? localPosition : nil
+        #endif
     }
 
+    private var showsPreview: Bool { previewTime != nil }
+
     var body: some View {
-        ZStack {
-            ChapterMarkerTrack(chapters: chapters, duration: duration, accent: accent)
-                .frame(height: 4)
-                .padding(.horizontal, 2)
-                .allowsHitTesting(false)
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            ZStack {
+                ChapterMarkerTrack(chapters: chapters, duration: duration, accent: accent)
+                    .frame(height: 4)
+                    .padding(.horizontal, 2)
+                    .allowsHitTesting(false)
 
-            ABLoopMarkerTrack(pointA: abLoopA, pointB: abLoopB, duration: duration, accent: accent)
-                .frame(height: rowHeight)
-                .padding(.horizontal, 2)
-                .allowsHitTesting(false)
+                ABLoopMarkerTrack(pointA: abLoopA, pointB: abLoopB, duration: duration, accent: accent)
+                    .frame(height: rowHeight)
+                    .padding(.horizontal, 2)
+                    .allowsHitTesting(false)
 
-            #if os(tvOS)
-            ProgressView(value: min(max(localPosition, 0), max(duration, 0.001)), total: max(duration, 0.001))
-                .tint(accent)
-                .progressViewStyle(.linear)
-            #else
-            Slider(
-                value: $localPosition,
-                in: 0...max(duration, 0.001),
-                onEditingChanged: { editing in
-                    if editing {
-                        isScrubbing = true
-                        onScrubStart()
-                    } else {
-                        position = localPosition
-                        onScrubEnd(localPosition)
+                #if os(tvOS)
+                ProgressView(value: min(max(localPosition, 0), max(duration, 0.001)), total: max(duration, 0.001))
+                    .tint(accent)
+                    .progressViewStyle(.linear)
+                #else
+                Slider(
+                    value: $localPosition,
+                    in: 0...max(duration, 0.001),
+                    onEditingChanged: { editing in
+                        if editing {
+                            isScrubbing = true
+                            onScrubStart()
+                            loader.bind(url: mediaURL, duration: duration)
+                            loader.request(time: localPosition)
+                        } else {
+                            position = localPosition
+                            onScrubEnd(localPosition)
+                            loader.endSession()
+                            #if os(macOS)
+                            hoverTime = nil
+                            #endif
+                        }
                     }
+                )
+                .tint(accent)
+                #endif
+
+                if let previewTime, showsPreview {
+                    let fraction = duration > 0 ? previewTime / duration : 0
+                    let thumbX = ScrubThumbGeometry.thumbCenterX(fraction: fraction, in: width)
+                    let bubbleX = ScrubThumbGeometry.bubbleCenterX(
+                        thumbX: thumbX,
+                        bubbleWidth: ScrubPreviewBubble.previewWidth,
+                        in: width
+                    )
+                    ScrubPreviewBubble(
+                        image: loader.image,
+                        time: previewTime,
+                        accent: accent
+                    )
+                    .position(x: bubbleX, y: -58)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
-            )
-            .tint(accent)
+            }
+            #if os(macOS)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    guard !isScrubbing else { return }
+                    let inset = ScrubThumbGeometry.trackInset
+                    let usable = max(1, width - inset * 2)
+                    let fraction = min(1, max(0, (location.x - inset) / usable))
+                    let time = fraction * max(duration, 0)
+                    hoverTime = time
+                    loader.bind(url: mediaURL, duration: duration)
+                    loader.request(time: time)
+                case .ended:
+                    guard !isScrubbing else { return }
+                    hoverTime = nil
+                    loader.endSession()
+                }
+            }
             #endif
         }
         .frame(height: rowHeight)
+        .animation(.easeOut(duration: 0.12), value: showsPreview)
         .onAppear {
             localPosition = position
+            loader.bind(url: mediaURL, duration: duration)
+        }
+        .onChange(of: mediaURL) { _, url in
+            loader.bind(url: url, duration: duration)
+        }
+        .onChange(of: duration) { _, newDuration in
+            loader.bind(url: mediaURL, duration: newDuration)
         }
         .onChange(of: localPosition) { _, value in
             if isScrubbing {
                 position = value
+                loader.request(time: value)
             }
         }
         .onChange(of: position) { _, newValue in
             if !isScrubbing {
                 localPosition = newValue
+            }
+        }
+        .onChange(of: isScrubbing) { _, scrubbing in
+            if !scrubbing {
+                loader.endSession()
             }
         }
         .transaction { transaction in

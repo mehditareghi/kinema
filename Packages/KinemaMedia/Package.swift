@@ -23,6 +23,9 @@ let package = Package(
                 "KinemaCore",
                 "KinemaMPV",
                 .product(name: "FFmpegKit", package: "MPVKitVendor")
+            ],
+            linkerSettings: [
+                .linkedFramework("AVFoundation")
             ]
         )
     ]

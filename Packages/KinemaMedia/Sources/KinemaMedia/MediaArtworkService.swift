@@ -1,4 +1,6 @@
+import AVFoundation
 import CoreGraphics
+import CoreMedia
 import FFmpegKit
 import Foundation
 import KinemaCore
@@ -91,6 +93,18 @@ public enum MediaArtworkService {
     }
 
     private static func extractPreviewCoordinated(from url: URL, at time: TimeInterval) -> MediaPreview {
+        // AV first for friendly containers — still capped by ThumbnailPipeline (max 2).
+        // Unbounded AV from the UI grid is what made folder scrolling lag.
+        if isAVFriendly(url),
+           let av = extractAVImage(from: url, at: time) {
+            return MediaPreview(
+                duration: av.duration,
+                width: av.width,
+                height: av.height,
+                image: av.image
+            )
+        }
+
         let metadata = probeMetadata(from: url)
 
         // Prefer FFmpeg — much lighter than spinning up mpv per tile.
@@ -135,6 +149,75 @@ public enum MediaArtworkService {
             width: metadata.width,
             height: metadata.height,
             image: nil
+        )
+    }
+
+    /// Containers where AVFoundation often hangs or fails — skip straight to FFmpeg.
+    private static let avHostileExtensions: Set<String> = [
+        "mkv", "webm", "ts", "m2ts", "mts", "avi", "flv", "wmv", "ogv", "mpg", "mpeg", "vob", "asf"
+    ]
+
+    private static func isAVFriendly(_ url: URL) -> Bool {
+        !avHostileExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private struct AVImageResult {
+        let image: CGImage
+        let duration: TimeInterval?
+        let width: Int
+        let height: Int
+    }
+
+    /// Synchronous AV grab for use on ThumbnailPipeline's detached workers.
+    private static func extractAVImage(from url: URL, at time: TimeInterval) -> AVImageResult? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 480, height: 270)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 3, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 3, preferredTimescale: 600)
+
+        let seek = resolvedSeekTime(requested: time, duration: nil)
+        let cmTime = CMTime(seconds: max(0, seek > 0 ? seek : 10), preferredTimescale: 600)
+
+        let lock = NSLock()
+        var image: CGImage?
+        let semaphore = DispatchSemaphore(value: 0)
+
+        generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: cmTime)]) { _, cgImage, _, result, _ in
+            lock.lock()
+            if result == .succeeded {
+                image = cgImage
+            }
+            lock.unlock()
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + 1.0) == .timedOut {
+            generator.cancelAllCGImageGeneration()
+            return nil
+        }
+
+        lock.lock()
+        let captured = image
+        lock.unlock()
+
+        guard let captured, FrameValidator.isAcceptable(captured) else { return nil }
+
+        var duration: TimeInterval?
+        let durationValue = asset.duration
+        if durationValue.isNumeric {
+            let seconds = CMTimeGetSeconds(durationValue)
+            if seconds.isFinite, seconds > 0 {
+                duration = seconds
+            }
+        }
+
+        return AVImageResult(
+            image: captured,
+            duration: duration,
+            width: captured.width,
+            height: captured.height
         )
     }
 
@@ -394,7 +477,7 @@ public enum MediaArtworkService {
             while true {
                 do {
                     try codecContext.receiveFrame(frame)
-                } catch let error as AVError where error == .tryAgain {
+                } catch let error as FFmpegKit.AVError where error == .tryAgain {
                     break
                 } catch {
                     break

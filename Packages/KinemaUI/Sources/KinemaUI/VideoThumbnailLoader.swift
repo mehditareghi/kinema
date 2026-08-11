@@ -88,6 +88,9 @@ enum VideoThumbnailLoader {
         }
 
         let mediaID = ThumbnailDiskStore.mediaID(for: url) as NSString
+
+        // Pipeline-limited decode (max 2). AV-first for friendly containers lives inside
+        // MediaArtworkService — never fire unbounded AV/QuickLook from the scroll grid.
         let preview = await MediaArtworkService.loadPreview(for: url, at: time, priority: priority)
         if Task.isCancelled {
             return VideoPreview(image: nil, duration: nil, qualityLabel: nil)
@@ -105,6 +108,9 @@ enum VideoThumbnailLoader {
 
         let seekTimes = seekCandidates(requested: time, duration: preview.duration)
         for seekTime in seekTimes {
+            if Task.isCancelled {
+                return VideoPreview(image: nil, duration: preview.duration, qualityLabel: preview.qualityLabel)
+            }
             if let generated = await generate(url: url, at: seekTime), isAcceptable(generated) {
                 return store(
                     generated,

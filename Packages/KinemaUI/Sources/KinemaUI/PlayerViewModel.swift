@@ -40,6 +40,7 @@ public final class PlayerViewModel {
         self.session = session ?? PlayerSessionPool.sharedSession()
         self.isMuted = PreferencesStore.shared.preferences.isMuted
         self.upNextOffer = self.session.upNextOffer
+        NowPlayingController.shared.attach(session: self.session)
         eventBusToken = EventBus.shared.subscribe { [weak self] event in
             Task { @MainActor in
                 self?.handleEvent(event)
@@ -75,6 +76,7 @@ public final class PlayerViewModel {
         showSubtitles = false
         showPlaylist = false
         ScreenWakeLock.setPreventSleep(false)
+        NowPlayingController.shared.deactivate()
         session.teardownPlayback()
         withAnimation(.easeInOut(duration: 0.28)) {
             appMode = .library
@@ -269,6 +271,12 @@ public final class PlayerViewModel {
 
     private func handleEvent(_ event: KinemaEvent) {
         switch event {
+        case .fileLoaded(let item):
+            NowPlayingController.shared.activate(for: item)
+        case .playbackInfoUpdated:
+            NowPlayingController.shared.handlePlaybackUpdate()
+        case .stateChanged:
+            NowPlayingController.shared.handleStateChange()
         case .playlistEnded:
             exitPlayer()
         case .error(let message):

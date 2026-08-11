@@ -24,6 +24,7 @@ let package = Package(
             dependencies: ["KinemaCore", "KinemaMedia", "KinemaPlayback", "KinemaSubtitles", "KinemaSharing"],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("MediaPlayer"),
                 .linkedFramework("QuickLookThumbnailing", .when(platforms: [.iOS, .macOS])),
                 .linkedFramework("IOKit", .when(platforms: [.macOS]))
             ]

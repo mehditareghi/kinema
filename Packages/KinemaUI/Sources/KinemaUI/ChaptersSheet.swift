@@ -63,7 +63,7 @@ public struct ChaptersSheet: View {
         KinemaCard(title: KinemaCopy.chapters, icon: "bookmark") {
             if session.chapters.isEmpty {
                 Text(KinemaCopy.chaptersNoneAvailable)
-                    .font(.footnote)
+                    .font(KinemaType.note)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(session.chapters.enumerated()), id: \.element.id) { index, chapter in
@@ -82,17 +82,17 @@ public struct ChaptersSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Text(String(format: "%02d", index + 1))
-                    .font(.caption.weight(.bold).monospacedDigit())
+                    .font(KinemaType.timecode.weight(.bold))
                     .foregroundStyle(isCurrent ? accent : .secondary)
                     .frame(width: 28, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(chapter.displayTitle)
-                        .font(.subheadline.weight(isCurrent ? .semibold : .medium))
+                        .font(KinemaType.labelRegular.weight(isCurrent ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
                     Text(formatTime(chapter.time))
-                        .font(.caption.monospacedDigit())
+                        .font(KinemaType.timecode)
                         .foregroundStyle(.secondary)
                 }
 
@@ -100,7 +100,7 @@ public struct ChaptersSheet: View {
 
                 if isCurrent {
                     Image(systemName: "speaker.wave.2.fill")
-                        .font(.body.weight(.semibold))
+                        .font(KinemaType.bodyStrong)
                         .foregroundStyle(accent)
                 }
             }

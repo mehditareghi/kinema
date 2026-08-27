@@ -50,7 +50,7 @@ struct VideoDisplayControl: View {
             }
         } label: {
             Image(systemName: "aspectratio")
-                .font(.body.weight(.medium))
+                .font(KinemaType.bodyMedium)
                 .frame(width: 44, height: 44)
                 .foregroundStyle(viewModel.session.isVideoDisplayCustomized ? accent : .white)
                 .contentShape(Rectangle())

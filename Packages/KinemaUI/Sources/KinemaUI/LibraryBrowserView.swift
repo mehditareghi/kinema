@@ -122,22 +122,27 @@ public struct LibraryBrowserView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            breadcrumbBar
-            Divider()
+        ZStack {
+            KinemaBackdrop()
 
-            if browse.isAtLibraryHome {
-                libraryHomeContent
-            } else if hasVisibleContent {
-                folderContents
-            } else if hasListedCurrentDirectory {
-                emptyFolderContent
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 0) {
+                breadcrumbBar
+
+                if browse.isAtLibraryHome {
+                    libraryHomeContent
+                } else if hasVisibleContent {
+                    folderContents
+                } else if hasListedCurrentDirectory {
+                    emptyFolderPage
+                } else {
+                    loadingFolderPage
+                }
             }
         }
         .searchable(text: $searchText, prompt: KinemaCopy.searchLibrary)
+        #if os(iOS)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
         .onAppear {
             reloadIfNeeded()
             progressToken = EventBus.shared.subscribe { event in
@@ -239,31 +244,40 @@ public struct LibraryBrowserView: View {
 
     private var libraryHomeContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 28) {
                 homeHeader
                 libraryRootsSection
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.top, 18)
+            .padding(.bottom, 32)
         }
+        .scrollContentBackground(.hidden)
     }
 
     private var homeHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TONIGHT AT KINEMA")
+                .font(KinemaType.eyebrow)
+                .tracking(2.2)
+                .foregroundStyle(KinemaTheme.brass)
             Text(KinemaCopy.collectionIntroTitle)
-                .font(.title3.weight(.bold))
+                .font(KinemaType.pageTitle)
+                .foregroundStyle(KinemaTheme.paper)
             Text(KinemaCopy.collectionIntroBody)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(KinemaType.label)
+                .foregroundStyle(KinemaTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 620, alignment: .leading)
         }
+        .padding(.vertical, 12)
     }
 
     private var libraryRootsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader(KinemaCopy.sources, systemImage: "externaldrive.fill")
 
-            VStack(spacing: 8) {
+            LazyVGrid(columns: folderColumns, alignment: .leading, spacing: 12) {
                 ForEach(rootStore.roots) { root in
                     Button {
                         browse.openRoot(root)
@@ -301,7 +315,9 @@ public struct LibraryBrowserView: View {
 
     private var folderContents: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 28) {
+                browsePageHeader
+
                 if !sortedFolderRows.isEmpty {
                     foldersSection
                 }
@@ -309,16 +325,41 @@ public struct LibraryBrowserView: View {
                     videosSection
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, pageHorizontalPadding)
+            .padding(.top, 18)
+            .padding(.bottom, 32)
         }
+        .scrollContentBackground(.hidden)
+    }
+
+    private var emptyFolderPage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            browsePageHeader
+            emptyFolderContent
+        }
+        .padding(.horizontal, pageHorizontalPadding)
+        .padding(.top, 18)
+        .padding(.bottom, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var loadingFolderPage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            browsePageHeader
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(.horizontal, pageHorizontalPadding)
+        .padding(.top, 18)
+        .padding(.bottom, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var foldersSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader(sectionFoldersTitle, systemImage: "folder")
 
-            VStack(spacing: 8) {
+            LazyVGrid(columns: folderColumns, alignment: .leading, spacing: 12) {
                 ForEach(sortedFolderRows) { row in
                     switch row {
                     case .real(let item):
@@ -410,6 +451,80 @@ public struct LibraryBrowserView: View {
         }
     }
 
+    private var browsePageHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(currentPageEyebrow)
+                .font(KinemaType.eyebrow)
+                .tracking(2.1)
+                .foregroundStyle(KinemaTheme.brass)
+
+            HStack(alignment: .center, spacing: 12) {
+                Text(browse.breadcrumbs.last?.title ?? KinemaCopy.collection)
+                    .font(KinemaType.pageTitle)
+                    .foregroundStyle(KinemaTheme.paper)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                pageStats
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var pageStats: some View {
+        HStack(spacing: 7) {
+            if !sortedFolderRows.isEmpty {
+                pageStat(
+                    count: sortedFolderRows.count,
+                    singular: "folder",
+                    plural: "folders",
+                    systemImage: "folder.fill"
+                )
+            }
+
+            if !displayedVideos.isEmpty {
+                pageStat(
+                    count: displayedVideos.count,
+                    singular: "title",
+                    plural: "titles",
+                    systemImage: "film.fill"
+                )
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var currentPageEyebrow: String {
+        guard let current = browse.breadcrumbs.last else { return "YOUR COLLECTION" }
+        switch current.kind {
+        case .library: return "YOUR COLLECTION"
+        case .root: return browse.selectedRoot?.isBuiltIn == true ? "KINEMA LIBRARY" : "LIBRARY SOURCE"
+        case .folder: return "FOLDER"
+        case .virtual: return "SPOTLIGHT"
+        }
+    }
+
+    private func pageStat(count: Int, singular: String, plural: String, systemImage: String) -> some View {
+        Label("\(count) \(count == 1 ? singular : plural)", systemImage: systemImage)
+            .font(KinemaType.metadata.weight(.medium))
+            .foregroundStyle(KinemaTheme.secondaryText)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.thinMaterial, in: Capsule())
+    }
+
+    private var pageHorizontalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 18 : 28
+    }
+
+    private var folderColumns: [GridItem] {
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible(), spacing: 12)]
+        }
+        return MediaLibraryLayout.posterColumns(horizontalSizeClass: horizontalSizeClass)
+    }
+
     private var breadcrumbBar: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -491,7 +606,7 @@ public struct LibraryBrowserView: View {
                         if crumb.id != browse.breadcrumbs.first?.id {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(KinemaTheme.secondaryText.opacity(0.72))
                                 .frame(width: Self.breadcrumbIconSize, height: Self.breadcrumbIconSize)
                         }
 
@@ -502,11 +617,20 @@ public struct LibraryBrowserView: View {
                 .frame(minHeight: 44, alignment: .center)
             }
             .frame(height: 44)
-            .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(
+                KinemaTheme.cardBackground.opacity(0.38),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(KinemaTheme.hairline.opacity(0.56), lineWidth: 0.5)
+            }
+            .shadow(color: .black.opacity(0.10), radius: 12, y: 5)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(KinemaTheme.settingsBackground)
+        .padding(.horizontal, pageHorizontalPadding)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 
     private static let breadcrumbIconSize: CGFloat = 14
@@ -528,12 +652,12 @@ public struct LibraryBrowserView: View {
                 Image(systemName: crumb.systemImage)
                     .font(.system(size: Self.breadcrumbIconSize, weight: .semibold))
                     .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(crumb.isCurrent ? accent : .secondary)
+                    .foregroundStyle(crumb.isCurrent ? accent : KinemaTheme.paper.opacity(0.76))
                     .frame(width: Self.breadcrumbIconSize, height: Self.breadcrumbIconSize)
                     .contentShape(Rectangle())
                 Text(crumb.title)
-                    .font(.subheadline.weight(crumb.isCurrent ? .semibold : .medium))
-                    .foregroundStyle(crumb.isCurrent ? .primary : .secondary)
+                    .font(KinemaType.labelRegular.weight(crumb.isCurrent ? .semibold : .medium))
+                    .foregroundStyle(crumb.isCurrent ? KinemaTheme.paper : KinemaTheme.paper.opacity(0.78))
                     .lineLimit(1)
             }
             // Same chrome metrics for every crumb — only the fill changes when current.
@@ -541,7 +665,13 @@ public struct LibraryBrowserView: View {
             .padding(.vertical, 4)
             .frame(height: 28)
             .background {
-                Capsule().fill(crumb.isCurrent ? accent.opacity(0.12) : .clear)
+                Capsule().fill(crumb.isCurrent ? accent.opacity(0.14) : KinemaTheme.cardBackground.opacity(0.62))
+            }
+            .overlay {
+                Capsule().strokeBorder(
+                    crumb.isCurrent ? accent.opacity(0.18) : KinemaTheme.hairline.opacity(0.46),
+                    lineWidth: 0.5
+                )
             }
         }
         .buttonStyle(.plain)
@@ -696,10 +826,7 @@ public struct LibraryBrowserView: View {
     }
 
     private func sectionHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
+        KinemaSectionTitle(title, systemImage: systemImage)
     }
 
     private func rootSubtitle(for root: LibraryRoot) -> String {

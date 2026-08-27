@@ -46,7 +46,7 @@ enum MediaLibraryLayout {
         return horizontalSizeClass == .regular ? 18 : 16
     }
 
-    static let posterCornerRadius: CGFloat = 12
+    static let posterCornerRadius: CGFloat = 10
     static let posterAspect: CGFloat = 16 / 9
 }
 
@@ -89,8 +89,16 @@ struct MediaPosterCard: View {
 
                     thumbnailLayer
 
-                    playHint
-                        .opacity(progress == nil ? 0.55 : 1)
+                    cinematicVignette
+
+                    VStack {
+                        Spacer(minLength: 0)
+                        HStack {
+                            playHint
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .padding(10)
 
                     if let progress, progress.duration > 0, !progress.isMostlyFinished {
                         progressStrip(progress.progress)
@@ -104,9 +112,9 @@ struct MediaPosterCard: View {
             .clipShape(RoundedRectangle(cornerRadius: MediaLibraryLayout.posterCornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: MediaLibraryLayout.posterCornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                    .strokeBorder(KinemaTheme.hairline.opacity(0.84), lineWidth: 0.6)
             }
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            .shadow(color: .black.opacity(0.42), radius: 14, y: 8)
             .onAppear {
                 hydrateFromCache()
             }
@@ -146,7 +154,7 @@ struct MediaPosterCard: View {
             HStack {
                 Spacer(minLength: 0)
                 Text(label)
-                    .font(.caption2.weight(.bold))
+                    .font(KinemaType.microBold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -184,21 +192,31 @@ struct MediaPosterCard: View {
     private var posterBackground: some View {
         LinearGradient(
             colors: [
-                accent.opacity(0.22),
-                Color.primary.opacity(0.06)
+                KinemaTheme.velvet.opacity(0.85),
+                KinemaTheme.ink
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
+    private var cinematicVignette: some View {
+        LinearGradient(
+            colors: [.clear, .clear, .black.opacity(0.68)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .allowsHitTesting(false)
+    }
+
     private var playHint: some View {
         Image(systemName: "play.fill")
-            .font(.title3.weight(.semibold))
+            .font(KinemaType.metadataBold)
             .foregroundStyle(.white)
-            .padding(14)
-            .background(.black.opacity(0.42), in: Circle())
-            .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+            .frame(width: 32, height: 32)
+            .background(accent.opacity(0.92), in: Circle())
+            .overlay(Circle().strokeBorder(KinemaTheme.projectorWhite.opacity(0.30), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.38), radius: 8, y: 3)
     }
 
     private func progressStrip(_ fraction: Double) -> some View {
@@ -227,13 +245,13 @@ struct MediaPosterCard: View {
     private var metadata: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.subheadline.weight(.medium))
+                .font(KinemaType.posterTitle)
                 .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
                 .foregroundStyle(.primary)
 
             metadataSubtitle
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .lineLimit(1, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -246,10 +264,10 @@ struct MediaPosterCard: View {
             if progress.isMostlyFinished {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(KinemaType.metadataStrong)
                         .foregroundStyle(accent)
                     Text("Watched")
-                        .font(.caption.weight(.medium))
+                        .font(KinemaType.metadataMedium)
                         .foregroundStyle(accent)
                     Text("·")
                         .foregroundStyle(.secondary)
@@ -312,13 +330,13 @@ struct MediaFolderTile: View {
                     .frame(width: 44, height: 44)
                     .overlay {
                         Image(systemName: systemImage)
-                            .font(.body.weight(.semibold))
+                            .font(KinemaType.bodyStrong)
                             .foregroundStyle(isFullyWatched ? accent.opacity(0.7) : accent)
                     }
 
                 if isFullyWatched {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.caption.weight(.bold))
+                        .font(KinemaType.metadataBold)
                         .foregroundStyle(accent)
                         .background(
                             Circle()
@@ -331,12 +349,12 @@ struct MediaFolderTile: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.subheadline.weight(.medium))
+                    .font(KinemaType.label)
                     .lineLimit(1)
                     .foregroundStyle(isFullyWatched ? .secondary : .primary)
                 if let displaySubtitle {
                     Text(displaySubtitle)
-                        .font(.caption.weight(isFullyWatched ? .medium : .regular))
+                        .font(KinemaType.metadata.weight(isFullyWatched ? .medium : .regular))
                         .foregroundStyle(isFullyWatched ? accent : .secondary)
                         .lineLimit(1)
                 }
@@ -346,17 +364,21 @@ struct MediaFolderTile: View {
 
             if isFullyWatched {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.body.weight(.semibold))
+                    .font(KinemaType.bodyStrong)
                     .foregroundStyle(accent)
             } else {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(KinemaType.metadataStrong)
                     .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(KinemaTheme.hairline.opacity(0.72), lineWidth: 0.5)
+        }
         .opacity(isFullyWatched ? 0.92 : 1)
     }
 }
@@ -371,15 +393,15 @@ struct AddLibraryFolderTile: View {
                 .frame(width: 44, height: 44)
                 .overlay {
                     Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
+                        .font(KinemaType.bodyStrong)
                         .foregroundStyle(accent)
                 }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(KinemaCopy.addSource)
-                    .font(.subheadline.weight(.semibold))
+                    .font(KinemaType.labelStrong)
                 Text(KinemaCopy.addSourceTileSubtitle)
-                    .font(.caption)
+                    .font(KinemaType.metadata)
                     .foregroundStyle(.secondary)
             }
 
@@ -388,6 +410,10 @@ struct AddLibraryFolderTile: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(KinemaTheme.cardBackground.opacity(0.65), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(KinemaTheme.hairline.opacity(0.72), lineWidth: 0.5)
+        }
     }
 }
 
@@ -409,19 +435,19 @@ struct BuiltInLibrarySourceTile: View {
                 .frame(width: 44, height: 44)
                 .overlay {
                     Image(systemName: "film.stack.fill")
-                        .font(.body.weight(.semibold))
+                        .font(KinemaType.bodyStrong)
                         .foregroundStyle(.white)
                 }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(KinemaCopy.appName)
-                        .font(.subheadline.weight(.semibold))
+                        .font(KinemaType.labelStrong)
                         .lineLimit(1)
                         .foregroundStyle(isFullyWatched ? .secondary : .primary)
 
                     Text(KinemaCopy.builtInSourceBadge)
-                        .font(.caption2.weight(.bold))
+                        .font(KinemaType.microBold)
                         .foregroundStyle(accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -429,7 +455,7 @@ struct BuiltInLibrarySourceTile: View {
                 }
 
                 Text(KinemaCopy.builtInSourceSubtitle)
-                    .font(.caption)
+                    .font(KinemaType.metadata)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -437,7 +463,7 @@ struct BuiltInLibrarySourceTile: View {
             Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(KinemaType.metadataStrong)
                 .foregroundStyle(accent.opacity(0.8))
         }
         .padding(.horizontal, 14)

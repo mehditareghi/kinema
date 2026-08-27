@@ -120,20 +120,20 @@ public struct TransportBar: View {
 
             HStack {
                 Text(formatTime(isScrubbing ? scrubPosition : viewModel.session.info.position))
-                    .font(.caption2.monospacedDigit())
+                    .font(KinemaType.timecodeSmall)
                 Spacer()
                 if viewModel.session.isABLooping {
                     Text(KinemaCopy.abLoop)
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .foregroundStyle(accent)
                 } else if let chapter = viewModel.session.currentChapter {
                     Text(chapter.displayTitle)
-                        .font(.caption2.weight(.medium))
+                        .font(KinemaType.microMedium)
                         .lineLimit(1)
                 }
                 Spacer()
                 Text(formatTime(viewModel.session.info.duration))
-                    .font(.caption2.monospacedDigit())
+                    .font(KinemaType.timecodeSmall)
             }
             .foregroundStyle(.secondary)
         }
@@ -156,7 +156,7 @@ public struct TransportBar: View {
                 viewModel.scheduleHideControls()
             } label: {
                 Image(systemName: viewModel.session.info.isPaused ? "play.fill" : "pause.fill")
-                    .font(.title2.weight(.semibold))
+                    .font(KinemaType.title)
                     .frame(width: 52, height: 52)
                     .background(accent.opacity(0.22), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
@@ -184,7 +184,7 @@ public struct TransportBar: View {
     private func transportButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
+                .font(KinemaType.bodyStrong)
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
@@ -284,7 +284,7 @@ struct PlayerToolsMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
+                .font(KinemaType.bodyStrong)
                 .frame(width: 36, height: 36)
                 .background(.white.opacity(0.08), in: Circle())
         }
@@ -302,7 +302,7 @@ public struct OSDOverlay: View {
     public var body: some View {
         if let message {
             Text(message)
-                .font(.title3.weight(.semibold))
+                .font(KinemaType.subtitle)
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
                 .transition(.opacity)

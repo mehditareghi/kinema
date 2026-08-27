@@ -391,7 +391,7 @@ struct ScrubPreviewBubble: View {
             .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
 
             Text(formatTime(time))
-                .font(.caption.weight(.semibold).monospacedDigit())
+                .font(KinemaType.timecode)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)

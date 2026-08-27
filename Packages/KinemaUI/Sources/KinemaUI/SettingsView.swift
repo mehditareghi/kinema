@@ -5,54 +5,136 @@ import KinemaSharing
 
 public struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var preferences: PreferencesStore { PreferencesStore.shared }
     @State private var fontFamilies: [SubtitleFontOption] = []
+    @State private var selectedCategory: SettingsCategory = .appearance
+    private let isStandalone: Bool
 
-    public init() {}
+    public init(isStandalone: Bool = true) {
+        self.isStandalone = isStandalone
+    }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    settingsHero
-                    settingsCards
+        Group {
+            if isStandalone {
+                NavigationStack {
+                    settingsContent
+                        .navigationTitle(KinemaCopy.preferences)
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(KinemaCopy.done) { dismiss() }
+                            }
+                        }
                 }
-                .padding(20)
+            } else {
+                settingsContent
             }
-            .background(KinemaTheme.settingsBackground)
-            .navigationTitle(KinemaCopy.preferences)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(KinemaCopy.done) { dismiss() }
-                }
-            }
-            .onAppear {
-                _ = SubtitleFontRegistry.prepare()
-                if fontFamilies.isEmpty {
-                    fontFamilies = SubtitleFontRegistry.availableFontFamilies()
-                }
-            }
-            .tint(KinemaTheme.accent)
         }
+        .onAppear {
+            _ = SubtitleFontRegistry.prepare()
+            if fontFamilies.isEmpty {
+                fontFamilies = SubtitleFontRegistry.availableFontFamilies()
+            }
+        }
+        .tint(KinemaTheme.accent)
+        .font(KinemaType.body)
         #if os(macOS)
-        .frame(minWidth: 480, idealWidth: 520, minHeight: 560)
+        .frame(minWidth: isStandalone ? 620 : nil, idealWidth: isStandalone ? 760 : nil, minHeight: isStandalone ? 620 : nil)
         #endif
     }
 
+    private var settingsContent: some View {
+        ZStack {
+            KinemaBackdrop()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    settingsHero
+                    settingsNavigation
+                    settingsCards
+                }
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.top, 18)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #if os(iOS)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
+    }
+
+    private var pageHorizontalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 18 : 28
+    }
+
+    private var settingsNavigation: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(SettingsCategory.allCases) { category in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            selectedCategory = category
+                        }
+                    } label: {
+                        Label(category.title, systemImage: category.systemImage)
+                            .font(KinemaType.label)
+                            .padding(.horizontal, 13)
+                            .frame(height: 38)
+                            .foregroundStyle(selectedCategory == category ? Color.white : KinemaTheme.secondaryText)
+                            .background {
+                                Capsule().fill(selectedCategory == category ? KinemaTheme.accent : KinemaTheme.cardBackground)
+                            }
+                            .overlay {
+                                Capsule().strokeBorder(
+                                    selectedCategory == category ? Color.clear : KinemaTheme.hairline,
+                                    lineWidth: 0.6
+                                )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
     private var settingsHero: some View {
-        KinemaSheetHero(
-            icon: "gearshape.fill",
-            title: KinemaCopy.appName,
-            subtitle: "Tune playback, subtitles, and your collection."
-        )
+        HStack(spacing: 18) {
+            KinemaMark(size: 58)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("HOUSE SETTINGS")
+                    .font(KinemaType.eyebrow)
+                    .tracking(2)
+                    .foregroundStyle(KinemaTheme.brass)
+                Text(KinemaCopy.preferences)
+                    .font(KinemaType.pageTitle)
+                    .foregroundStyle(KinemaTheme.paper)
+                Text("Shape the room, the picture, and the way every film begins.")
+                    .font(KinemaType.label)
+                    .foregroundStyle(KinemaTheme.secondaryText)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 6)
     }
 
     private var settingsCards: some View {
         VStack(spacing: 16) {
-            KinemaCard(title: "Playback", icon: "play.circle") {
+            if selectedCategory == .appearance {
+                appearanceSettings
+            }
+
+            if selectedCategory == .playback {
+                KinemaCard(title: "Playback", icon: "play.circle") {
                 SettingsToggleRow(title: "Resume playback", subtitle: "Continue videos from the last watched position.", isOn: binding(\.resumePlayback))
                 SettingsToggleRow(
                     title: KinemaCopy.upNext,
@@ -71,8 +153,8 @@ public struct SettingsView: View {
                     }
                 }
                 Text("Applies to seek buttons, double-tap, keyboard arrows, and Lock Screen skip.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
                 SettingsSliderRow(title: "Default volume", valueText: "\(Int(preferences.preferences.volume))%", value: Binding(
                     get: { preferences.preferences.volume },
                     set: { PlayerSessionPool.sharedSession().setVolume($0) }
@@ -95,8 +177,8 @@ public struct SettingsView: View {
                         }
                     }
                     Text(KinemaCopy.hdrToneMappingSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(KinemaType.metadata)
+                        .foregroundStyle(KinemaTheme.secondaryText)
                 }
                 SettingsSliderRow(
                     title: KinemaCopy.hdrTargetPeak,
@@ -111,11 +193,15 @@ public struct SettingsView: View {
                     range: KinemaPreferences.hdrTargetPeakRange,
                     step: 50
                 )
+                }
             }
 
-            AudioSettingsCard()
+            if selectedCategory == .audio {
+                AudioSettingsCard()
+            }
 
-            KinemaCard(title: KinemaCopy.captions, icon: "captions.bubble") {
+            if selectedCategory == .captions {
+                KinemaCard(title: KinemaCopy.captions, icon: "captions.bubble") {
                 SettingsToggleRow(
                     title: KinemaCopy.captionsAutoLoad,
                     subtitle: KinemaCopy.captionsAutoLoadSubtitle,
@@ -266,31 +352,89 @@ public struct SettingsView: View {
                         }
                     }
                 }
+                }
             }
 
             #if os(macOS)
-            KinemaCard(title: "macOS", icon: "macbook") {
-                Toggle("Enable Music Mode window", isOn: binding(\.musicModeEnabled))
-                    .tint(KinemaTheme.accent)
-                Text("Open via Window → Music Mode when a track is playing.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if selectedCategory == .library {
+                KinemaCard(title: "macOS", icon: "macbook") {
+                    Toggle("Enable Music Mode window", isOn: binding(\.musicModeEnabled))
+                        .tint(KinemaTheme.accent)
+                    Text("Open via Window → Music Mode when a track is playing.")
+                        .font(KinemaType.metadata)
+                        .foregroundStyle(KinemaTheme.secondaryText)
+                }
             }
             #endif
 
-            WiFiSharingSettingsCard()
-
-            KinemaCard(title: "Keyboard Shortcuts", icon: "keyboard") {
-                KeyBindingsSettingsSection()
+            if selectedCategory == .library {
+                WiFiSharingSettingsCard()
             }
 
-            KinemaCard(title: "About", icon: "info.circle") {
-                LabeledContent("Version", value: "1.0.0")
-                LabeledContent("Engine", value: "libmpv")
-                Text("κίνημα — motion, cinema")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if selectedCategory == .controls {
+                KinemaCard(title: "Keyboard Shortcuts", icon: "keyboard") {
+                    KeyBindingsSettingsSection()
+                }
             }
+
+            if selectedCategory == .about {
+                KinemaCard(title: "About", icon: "info.circle") {
+                    HStack(spacing: 14) {
+                        KinemaMark(size: 48)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Kinema")
+                                .font(KinemaType.title)
+                            Text("κίνημα — motion, cinema")
+                                .font(KinemaType.metadata)
+                                .foregroundStyle(KinemaTheme.secondaryText)
+                        }
+                    }
+                    Divider()
+                    LabeledContent("Version", value: "1.0.0")
+                    LabeledContent("Engine", value: "libmpv")
+                }
+            }
+        }
+    }
+
+    private var appearanceSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            KinemaSectionTitle("Appearance", systemImage: "circle.lefthalf.filled")
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+                ForEach(AppAppearance.allCases) { appearance in
+                    Button {
+                        preferences.preferences.appearance = appearance
+                    } label: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            AppearanceSwatch(appearance: appearance)
+                            HStack {
+                                Label(appearance.displayName, systemImage: appearance.systemImage)
+                                    .font(KinemaType.label)
+                                Spacer(minLength: 0)
+                                if preferences.preferences.appearance == appearance {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(KinemaTheme.accent)
+                                }
+                            }
+                        }
+                        .padding(12)
+                        .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(
+                                    preferences.preferences.appearance == appearance ? KinemaTheme.accent : KinemaTheme.hairline,
+                                    lineWidth: preferences.preferences.appearance == appearance ? 1.5 : 0.6
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text("System follows your device. Light uses the warmth of a printed programme; Dark recreates the auditorium without changing Kinema’s identity.")
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
         }
     }
 
@@ -306,6 +450,83 @@ public struct SettingsView: View {
         Binding(
             get: { preferences.preferences[keyPath: keyPath] },
             set: { preferences.preferences[keyPath: keyPath] = $0 }
+        )
+    }
+}
+
+private enum SettingsCategory: String, CaseIterable, Identifiable {
+    case appearance
+    case playback
+    case audio
+    case captions
+    case library
+    case controls
+    case about
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+
+    var systemImage: String {
+        switch self {
+        case .appearance: return "circle.lefthalf.filled"
+        case .playback: return "play.circle"
+        case .audio: return "speaker.wave.3"
+        case .captions: return "captions.bubble"
+        case .library: return "externaldrive"
+        case .controls: return "keyboard"
+        case .about: return "info.circle"
+        }
+    }
+}
+
+private struct AppearanceSwatch: View {
+    let appearance: AppAppearance
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                switch appearance {
+                case .system:
+                    HStack(spacing: 0) {
+                        previewBackground(isDark: false)
+                        previewBackground(isDark: true)
+                    }
+                case .light:
+                    previewBackground(isDark: false)
+                case .dark:
+                    previewBackground(isDark: true)
+                }
+
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(appearance == .dark ? Color.white.opacity(0.86) : Color(red: 0.13, green: 0.10, blue: 0.09))
+                    .frame(width: geometry.size.width * 0.42, height: 6)
+                    .offset(x: -geometry.size.width * 0.16, y: -13)
+
+                HStack(spacing: 5) {
+                    ForEach(0..<3, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(index == 0 ? Color(red: 0.70, green: 0.18, blue: 0.16) : Color.white.opacity(appearance == .dark ? 0.12 : 0.72))
+                    }
+                }
+                .padding(9)
+                .offset(y: 10)
+            }
+        }
+        .frame(height: 86)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+        }
+    }
+
+    private func previewBackground(isDark: Bool) -> some View {
+        LinearGradient(
+            colors: isDark
+                ? [Color(red: 0.07, green: 0.06, blue: 0.055), Color(red: 0.17, green: 0.045, blue: 0.04)]
+                : [Color(red: 0.98, green: 0.96, blue: 0.92), Color(red: 0.93, green: 0.88, blue: 0.81)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
     }
 }
@@ -376,8 +597,8 @@ private struct AudioSettingsCard: View {
             )
 
             Text("Equalizer and effects are available from the player Audio sheet. Output module changes apply the next time the player starts.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
         }
         .onAppear {
             refreshDevices()
@@ -425,8 +646,8 @@ private struct WiFiSharingSettingsCard: View {
             #endif
 
             Text(KinemaCopy.wifiSharingPasscodeHint)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
 
             SettingsToggleRow(
                 title: KinemaCopy.wifiSharingPreferIPv6,
@@ -447,8 +668,8 @@ private struct WiFiSharingSettingsCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(KinemaCopy.wifiSharingURL)
                         Text(url)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .font(KinemaType.timecode)
+                            .foregroundStyle(KinemaTheme.secondaryText)
                             #if os(iOS) || os(macOS)
                             .textSelection(.enabled)
                             #endif
@@ -468,7 +689,7 @@ private struct WiFiSharingSettingsCard: View {
                 .id(refreshTick)
             } else if let error = server.lastError, preferences.preferences.wifiSharingEnabled {
                 Text(error)
-                    .font(.caption)
+                    .font(KinemaType.metadata)
                     .foregroundStyle(.red)
             }
         }
@@ -510,9 +731,10 @@ private struct SettingsToggleRow: View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
+                    .font(KinemaType.label)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
             }
         }
         .tint(KinemaTheme.accent)
@@ -530,10 +752,11 @@ private struct SettingsSliderRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
+                    .font(KinemaType.label)
                 Spacer()
                 Text(valueText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.timecode)
+                    .foregroundStyle(KinemaTheme.secondaryText)
             }
             if let step {
                 Slider(value: $value, in: range, step: step)
@@ -560,16 +783,17 @@ private struct SettingsMenuRow<Content: View>: View {
     var body: some View {
         HStack {
             Text(title)
+                .font(KinemaType.label)
             Spacer(minLength: 12)
             Menu {
                 content
             } label: {
                 HStack(spacing: 6) {
                     Text(value)
-                        .font(.subheadline.weight(.medium))
+                        .font(KinemaType.label)
                         .lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .foregroundStyle(KinemaTheme.accent)
                 }
             }
@@ -598,10 +822,11 @@ private struct SettingsColorSwatchRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
+                    .font(KinemaType.label)
                 Spacer()
                 Text(selectedPresetName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
             }
 
             HStack(spacing: 10) {
@@ -663,12 +888,12 @@ private struct KeyBindingsSettingsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             #if os(macOS)
             Text("Click Add key, then press a key. Conflicting shortcuts move off the other action.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
 
             if let statusMessage {
                 Text(statusMessage)
-                    .font(.caption.weight(.medium))
+                    .font(KinemaType.metadataMedium)
                     .foregroundStyle(KinemaTheme.accent)
             }
             #endif
@@ -776,10 +1001,10 @@ private struct KeyBindingEditorRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(binding.description)
-                    .font(.subheadline)
+                    .font(KinemaType.labelRegular)
                 if isCustomized {
                     Text("Custom")
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .foregroundStyle(KinemaTheme.accent)
                 }
                 Spacer(minLength: 8)
@@ -787,7 +1012,7 @@ private struct KeyBindingEditorRow: View {
                 if isCustomized {
                     Button(KinemaCopy.keyboardReset, action: onReset)
                         .buttonStyle(.borderless)
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
                 #endif
@@ -817,7 +1042,7 @@ private struct KeyBindingEditorRow: View {
                 } else {
                     Button(action: onStartRecording) {
                         Text(KinemaCopy.keyboardAddKey)
-                            .font(.caption.weight(.semibold))
+                            .font(KinemaType.metadataStrong)
                             .foregroundStyle(KinemaTheme.accent)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -828,7 +1053,7 @@ private struct KeyBindingEditorRow: View {
                 #elseif os(iOS) || os(tvOS)
                 if binding.keys.isEmpty {
                     Text("—")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
                 #endif
@@ -840,7 +1065,7 @@ private struct KeyBindingEditorRow: View {
     private func keyChipLabel(_ title: String, showRemove: Bool, accented: Bool = false) -> some View {
         HStack(spacing: 4) {
             Text(title)
-                .font(.caption.monospaced())
+                .font(KinemaType.codeSmall)
             if showRemove {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
@@ -856,4 +1081,3 @@ private struct KeyBindingEditorRow: View {
         )
     }
 }
-

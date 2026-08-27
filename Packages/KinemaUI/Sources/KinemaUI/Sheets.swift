@@ -37,9 +37,9 @@ public struct PlaylistSheet: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading) {
-                                    Text(item.title).font(.headline)
+                                    Text(item.title).font(KinemaType.cardTitle)
                                     Text(item.url.lastPathComponent)
-                                        .font(.caption)
+                                        .font(KinemaType.metadata)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -259,7 +259,7 @@ public struct SubtitlePickerSheet: View {
                uniqueExternalSubtitleTracks.isEmpty,
                unloadedLocalMatches.isEmpty {
                 Text(KinemaCopy.captionsNoneAvailable)
-                    .font(.footnote)
+                    .font(KinemaType.note)
                     .foregroundStyle(.secondary)
             }
         }
@@ -302,7 +302,7 @@ public struct SubtitlePickerSheet: View {
             .buttonStyle(.borderedProminent)
             .tint(accent)
             Text("Supports SRT, ASS/SSA, VTT, VobSub (.idx), SAMI, MicroDVD, MPL2, PGS (.sup), and more.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
         }
     }
@@ -311,7 +311,7 @@ public struct SubtitlePickerSheet: View {
         KinemaCard(title: "Sync", icon: "clock.arrow.2.circlepath") {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Apply to")
-                    .font(.subheadline.weight(.medium))
+                    .font(KinemaType.label)
                 Picker("Apply to", selection: Binding(
                     get: { session.syncTarget },
                     set: { session.syncTarget = $0 }
@@ -328,7 +328,7 @@ public struct SubtitlePickerSheet: View {
                 Text(delayLabel)
                 Spacer()
                 Text(String(format: "%+.2fs", displayedDelay))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
@@ -343,7 +343,7 @@ public struct SubtitlePickerSheet: View {
                 Text("Audio delay")
                 Spacer()
                 Text(String(format: "%+.2fs", session.audioDelay))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
@@ -358,7 +358,7 @@ public struct SubtitlePickerSheet: View {
                 Text("Subtitle speed")
                 Spacer()
                 Text(String(format: "%.2fx", session.subtitleSpeed))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -372,9 +372,9 @@ public struct SubtitlePickerSheet: View {
             .tint(accent)
 
             Text("Bookmark sync")
-                .font(.subheadline.weight(.semibold))
+                .font(KinemaType.labelStrong)
             Text("Mark when you hear a line, mark when you see it, then apply — uses the target above.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 Button("Mark audio") { session.markBookmarkAudio() }
@@ -416,20 +416,20 @@ public struct SubtitlePickerSheet: View {
         KinemaCard(title: "Saved for this title", icon: "pin.fill") {
             if uniqueRememberedSubtitles.isEmpty {
                 Text("Subtitles you browse and add are remembered here for next time.")
-                    .font(.footnote)
+                    .font(KinemaType.note)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(uniqueRememberedSubtitles) { item in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.displayName)
-                                .font(.subheadline.weight(.medium))
+                                .font(KinemaType.label)
                             Text(
                                 abs(item.delay) > 0.001
                                     ? String(format: "Saved · delay %+.2fs", item.delay)
                                     : "Saved with this video"
                             )
-                            .font(.caption)
+                            .font(KinemaType.metadata)
                             .foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 8)
@@ -460,14 +460,14 @@ public struct SubtitlePickerSheet: View {
             }
 
             Text("Primary and secondary share this spot. When both are on, libmpv stacks them (MX-style).")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
 
             HStack {
                 Text("Vertical fine-tune")
                 Spacer()
                 Text("\(prefs.preferences.subtitlePos)")
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -488,7 +488,7 @@ public struct SubtitlePickerSheet: View {
                 Text(KinemaCopy.captionsSize)
                 Spacer()
                 Text("\(prefs.preferences.subtitleFontSize)")
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -505,7 +505,7 @@ public struct SubtitlePickerSheet: View {
                 Text("Text opacity")
                 Spacer()
                 Text("\(Int(subtitleColorOpacity(prefs.preferences.subtitleColorHex) * 100))%")
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -526,7 +526,7 @@ public struct SubtitlePickerSheet: View {
                 Text("Outline size")
                 Spacer()
                 Text(String(format: "%.1f", prefs.preferences.subtitleBorderSize))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -543,7 +543,7 @@ public struct SubtitlePickerSheet: View {
                 Text("Shadow")
                 Spacer()
                 Text(String(format: "%.1f", prefs.preferences.subtitleShadowOffset))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -586,7 +586,7 @@ public struct SubtitlePickerSheet: View {
             }
 
             Text("Backdrop / outline colors are in Preferences → Subtitles.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
         }
     }
@@ -597,10 +597,10 @@ public struct SubtitlePickerSheet: View {
             if let episode = detectedEpisode {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(episode.displayLabel)
-                        .font(.subheadline.weight(.semibold))
+                        .font(KinemaType.labelStrong)
                     if let first = results.first, let title = first.episodeTitle, !title.isEmpty {
                         Text(title)
-                            .font(.caption)
+                            .font(KinemaType.metadata)
                             .foregroundStyle(.secondary)
                     }
 
@@ -635,12 +635,12 @@ public struct SubtitlePickerSheet: View {
                     .disabled(isSearchingOnline || isDownloading || searchLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                     Text("Saves the subtitle next to the video and remembers it for next time.")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
 
                     if let downloadMessage {
                         Text(downloadMessage)
-                            .font(.footnote)
+                            .font(KinemaType.note)
                             .foregroundStyle(.secondary)
                     }
 
@@ -651,10 +651,10 @@ public struct SubtitlePickerSheet: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(result.version)
-                                        .font(.subheadline.weight(.medium))
+                                        .font(KinemaType.label)
                                         .foregroundStyle(.primary)
                                     Text(result.detailLine)
-                                        .font(.caption)
+                                        .font(KinemaType.metadata)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -674,7 +674,7 @@ public struct SubtitlePickerSheet: View {
                 }
             } else {
                 Text("Online search works for TV episodes named like Show.S01E02.")
-                    .font(.footnote)
+                    .font(KinemaType.note)
                     .foregroundStyle(.secondary)
             }
         }
@@ -731,10 +731,10 @@ public struct SubtitlePickerSheet: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                        .font(KinemaType.labelRegular.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
 
@@ -742,7 +742,7 @@ public struct SubtitlePickerSheet: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.body.weight(.semibold))
+                        .font(KinemaType.bodyStrong)
                         .foregroundStyle(accent)
                 }
             }
@@ -886,7 +886,7 @@ private struct EncodingLoadSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Load with your current encoding, or pick another only if the text looks wrong.")
-                    .font(.subheadline)
+                    .font(KinemaType.labelRegular)
                     .foregroundStyle(.secondary)
 
                 Button {
@@ -900,7 +900,7 @@ private struct EncodingLoadSheet: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Other encoding (optional)")
-                        .font(.subheadline.weight(.medium))
+                        .font(KinemaType.label)
                     Picker("Encoding", selection: $selectedEncodingID) {
                         ForEach(SubtitlePreferenceCatalog.encodings) { encoding in
                             Text(encoding.displayName).tag(encoding.id)
@@ -950,10 +950,10 @@ private struct SettingsMenuRowInline<Content: View>: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(value)
-                        .font(.subheadline.weight(.medium))
+                        .font(KinemaType.label)
                         .lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .foregroundStyle(KinemaTheme.accent)
                 }
             }

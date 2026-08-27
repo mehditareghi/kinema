@@ -3,6 +3,11 @@ import SwiftData
 import UniformTypeIdentifiers
 import KinemaCore
 import KinemaPlayback
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Kinema shell — tabs on iPhone (compact), sidebar on iPad / Mac (regular).
 public struct LibraryShellView: View {
@@ -12,7 +17,6 @@ public struct LibraryShellView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var showFileImporter = false
-    @State private var showSettings = false
     @State private var showFolderPicker = false
     @State private var removeRootTarget: LibraryRoot?
 
@@ -45,6 +49,7 @@ public struct LibraryShellView: View {
             #endif
         }
         .tint(accent)
+        .font(KinemaType.body)
         .onAppear {
             viewModel.session.historyContext = modelContext
         }
@@ -57,9 +62,6 @@ public struct LibraryShellView: View {
             handleImportedFiles(result)
         }
         #endif
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
         #if os(iOS) || os(macOS)
         .fileImporter(
             isPresented: $showFolderPicker,
@@ -106,13 +108,6 @@ public struct LibraryShellView: View {
                                     Label(KinemaCopy.openFiles, systemImage: "doc.badge.plus")
                                 }
                             }
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    showSettings = true
-                                } label: {
-                                    Label(KinemaCopy.preferences, systemImage: "gearshape")
-                                }
-                            }
                         }
                 }
                 .tabItem {
@@ -132,7 +127,6 @@ public struct LibraryShellView: View {
         } detail: {
             NavigationStack {
                 detailContent(for: viewModel.librarySection)
-                    .navigationTitle(viewModel.librarySection.tabTitle)
             }
         }
     }
@@ -146,23 +140,16 @@ public struct LibraryShellView: View {
             RecentLibraryView(viewModel: viewModel)
         case .stream:
             OpenStreamView(viewModel: viewModel)
+        case .preferences:
+            SettingsView(isStandalone: false)
         }
     }
 
     private var librarySidebar: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                KinemaMark(size: 38)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(KinemaCopy.appName)
-                        .font(.title3.weight(.bold))
-                    Text(KinemaCopy.tagline)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            KinemaBrandHeader()
             .padding(.horizontal, 18)
-            .padding(.top, 18)
+            .padding(.top, 22)
 
             VStack(spacing: 8) {
                 ForEach(LibrarySection.primaryCases) { section in
@@ -181,9 +168,9 @@ public struct LibraryShellView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(KinemaCopy.openSection)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+                    .font(KinemaType.eyebrow)
+                    .tracking(1.4)
+                    .foregroundStyle(KinemaTheme.secondaryText)
                     .padding(.horizontal, 8)
 
                 sidebarButton(title: KinemaCopy.openFiles, icon: "doc.badge.plus", isSelected: false) {
@@ -215,10 +202,28 @@ public struct LibraryShellView: View {
 
             Spacer(minLength: 0)
         }
-        .background(KinemaTheme.sidebarBackground)
+        .background {
+            ZStack {
+                KinemaTheme.sidebarBackground
+                LinearGradient(
+                    stops: [
+                        .init(color: KinemaTheme.velvet.opacity(0.22), location: 0),
+                        .init(color: KinemaTheme.velvet.opacity(0.06), location: 0.34),
+                        .init(color: .clear, location: 0.72)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .ignoresSafeArea()
+        }
         .safeAreaInset(edge: .bottom) {
-            sidebarButton(title: KinemaCopy.preferences, icon: "gearshape", isSelected: false) {
-                showSettings = true
+            sidebarButton(
+                title: KinemaCopy.preferences,
+                icon: "slider.horizontal.3",
+                isSelected: viewModel.librarySection == .preferences
+            ) {
+                viewModel.librarySection = .preferences
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -235,11 +240,11 @@ public struct LibraryShellView: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.body.weight(.semibold))
+                    .font(KinemaType.bodyStrong)
                     .frame(width: 24)
                     .foregroundStyle(isSelected ? accent : .secondary)
                 Text(title)
-                    .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                    .font(KinemaType.label.weight(isSelected ? .semibold : .medium))
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -247,7 +252,7 @@ public struct LibraryShellView: View {
             .foregroundStyle(isSelected ? .primary : .secondary)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? accent.opacity(0.14) : Color.clear)
+                    .fill(isSelected ? accent.opacity(0.12) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -257,9 +262,9 @@ public struct LibraryShellView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(KinemaCopy.sources)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+                    .font(KinemaType.eyebrow)
+                    .tracking(1.4)
+                    .foregroundStyle(KinemaTheme.secondaryText)
                 Spacer()
                 Button {
                     showFolderPicker = true
@@ -296,11 +301,11 @@ public struct LibraryShellView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "externaldrive.fill")
-                    .font(.body.weight(.semibold))
+                    .font(KinemaType.bodyStrong)
                     .frame(width: 24)
                     .foregroundStyle(isSelected ? accent : .secondary)
                 Text(root.name)
-                    .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                    .font(KinemaType.label.weight(isSelected ? .semibold : .medium))
                     .lineLimit(1)
                 Spacer()
             }
@@ -309,7 +314,7 @@ public struct LibraryShellView: View {
             .foregroundStyle(isSelected ? .primary : .secondary)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? accent.opacity(0.14) : Color.clear)
+                    .fill(isSelected ? accent.opacity(0.12) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -386,13 +391,11 @@ public struct LibraryShellView: View {
     #endif
 }
 
-#if os(macOS)
-import AppKit
-#endif
-
 public struct OpenStreamView: View {
     @Bindable var viewModel: PlayerViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var urlText = ""
+    @State private var recentStreams: [WatchProgressEntry] = []
     @FocusState private var focused: Bool
 
     private var accent: Color { KinemaTheme.accent }
@@ -402,66 +405,277 @@ public struct OpenStreamView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                KinemaSheetHero(
-                    icon: "link",
-                    title: KinemaCopy.openStreamTitle,
-                    subtitle: KinemaCopy.openStreamHeroSubtitle
-                )
+        ZStack {
+            KinemaBackdrop()
 
-                KinemaCard(title: KinemaCopy.openStreamFieldLabel, icon: "globe") {
-                    TextField(KinemaCopy.openStreamPlaceholder, text: $urlText)
-                        .textFieldStyle(.plain)
-                        .font(.body.monospaced())
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .submitLabel(.go)
-                        #endif
-                        .focused($focused)
-                        .onSubmit { openURL() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    streamHero
+                    streamComposer
 
-                    Text(KinemaCopy.openStreamHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if !recentStreams.isEmpty {
+                        recentStreamsSection
+                    }
+                }
+                .padding(.horizontal, pageHorizontalPadding)
+                .padding(.top, 18)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #if os(iOS)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
+        .onAppear {
+            reloadRecentStreams()
+            focused = urlText.isEmpty
+        }
+        .onChange(of: viewModel.isInPlayer) { wasInPlayer, isInPlayer in
+            if wasInPlayer && !isInPlayer {
+                reloadRecentStreams()
+            }
+        }
+    }
+
+    private var streamHero: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("A SCREENING FROM ANYWHERE")
+                .font(KinemaType.eyebrow)
+                .tracking(2.2)
+                .foregroundStyle(KinemaTheme.brass)
+            Text(KinemaCopy.openStreamTitle)
+                .font(KinemaType.pageTitle)
+                .foregroundStyle(KinemaTheme.paper)
+            Text(KinemaCopy.openStreamHeroSubtitle)
+                .font(KinemaType.label)
+                .foregroundStyle(KinemaTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 620, alignment: .leading)
+        }
+        .padding(.vertical, 12)
+    }
+
+    private var streamComposer: some View {
+        KinemaCard(title: KinemaCopy.openStreamFieldLabel, icon: "link") {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(KinemaType.bodyStrong)
+                    .foregroundStyle(parsedURL == nil ? KinemaTheme.secondaryText : accent)
+
+                TextField(KinemaCopy.openStreamPlaceholder, text: $urlText)
+                    .textFieldStyle(.plain)
+                    .font(KinemaType.code)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .submitLabel(.go)
+                    #endif
+                    .focused($focused)
+                    .onSubmit { openURL() }
+
+                if !urlText.isEmpty {
+                    Button {
+                        urlText = ""
+                        focused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(KinemaTheme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear address")
                 }
 
-                Button {
-                    openURL()
-                } label: {
-                    Label(KinemaCopy.openStreamPlay, systemImage: "play.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(accent)
-                .disabled(parsedURL == nil || viewModel.isOpeningMedia)
-                .padding(.top, 4)
-
-                Button {
-                    downloadURL()
-                } label: {
-                    Label(KinemaCopy.downloadToLibrary, systemImage: "arrow.down.circle")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
+                Button(action: pasteAddress) {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                        .font(KinemaType.labelStrong)
                 }
                 .buttonStyle(.bordered)
-                .tint(accent)
-                .disabled(parsedURL == nil)
+                .controlSize(.small)
             }
-            .padding(20)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 54)
+            .background(KinemaTheme.raisedBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        focused ? accent.opacity(0.72) : KinemaTheme.hairline.opacity(0.82),
+                        lineWidth: focused ? 1.4 : 0.6
+                    )
+            }
+            .animation(.easeOut(duration: 0.16), value: focused)
+
+            streamAddressStatus
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { streamActions }
+                VStack(spacing: 10) { streamActions }
+            }
+
+            HStack(spacing: 8) {
+                protocolChip("HTTPS")
+                protocolChip("HLS")
+                protocolChip("RTSP")
+                protocolChip("RTMP")
+                protocolChip("KINEMA")
+            }
+            .accessibilityElement(children: .combine)
         }
-        .background(KinemaTheme.settingsBackground)
-        .onAppear { focused = true }
+    }
+
+    @ViewBuilder
+    private var streamActions: some View {
+        Button(action: openURL) {
+            HStack(spacing: 9) {
+                if viewModel.isOpeningMedia {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "play.fill")
+                }
+                Text(viewModel.isOpeningMedia ? "Opening…" : KinemaCopy.openStreamPlay)
+            }
+            .font(KinemaType.control)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(accent)
+        .disabled(parsedURL == nil || viewModel.isOpeningMedia)
+
+        Button(action: downloadURL) {
+            Label(KinemaCopy.downloadToLibrary, systemImage: "arrow.down.circle")
+                .font(KinemaType.control)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+        }
+        .buttonStyle(.bordered)
+        .tint(accent)
+        .disabled(!canDownload)
+        .help(canDownload ? "Download this address into Kinema" : "Downloads require an HTTP or HTTPS address")
+    }
+
+    @ViewBuilder
+    private var streamAddressStatus: some View {
+        if urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Label(KinemaCopy.openStreamHint, systemImage: "info.circle")
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
+        } else if let url = parsedURL {
+            HStack(spacing: 7) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(accent)
+                Text(url.scheme?.uppercased() ?? "LINK")
+                    .font(KinemaType.microBold)
+                    .foregroundStyle(accent)
+                Text(url.host ?? url.absoluteString)
+                    .font(KinemaType.metadata)
+                    .lineLimit(1)
+                    .foregroundStyle(KinemaTheme.secondaryText)
+            }
+        } else {
+            Label("Enter a complete address including its protocol.", systemImage: "exclamationmark.triangle.fill")
+                .font(KinemaType.metadata)
+                .foregroundStyle(accent)
+        }
+    }
+
+    private func protocolChip(_ title: String) -> some View {
+        Text(title)
+            .font(KinemaType.microStrong)
+            .foregroundStyle(KinemaTheme.secondaryText)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(KinemaTheme.raisedBackground.opacity(0.72), in: Capsule())
+    }
+
+    private var recentStreamsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            KinemaSectionTitle("Recent Streams", systemImage: "clock.arrow.circlepath")
+
+            LazyVGrid(columns: recentColumns, alignment: .leading, spacing: 12) {
+                ForEach(recentStreams) { entry in
+                    Button {
+                        guard let url = entry.url else { return }
+                        urlText = url.absoluteString
+                        focused = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.rectangle.fill")
+                                .font(KinemaType.bodyStrong)
+                                .foregroundStyle(accent)
+                                .frame(width: 40, height: 40)
+                                .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entry.title)
+                                    .font(KinemaType.posterTitle)
+                                    .foregroundStyle(KinemaTheme.paper)
+                                    .lineLimit(1)
+                                HStack(spacing: 5) {
+                                    Text(entry.url?.host ?? entry.url?.scheme?.uppercased() ?? "Stream")
+                                    Text("·")
+                                    Text(entry.lastPlayedAt, style: .relative)
+                                }
+                                .font(KinemaType.metadata)
+                                .foregroundStyle(KinemaTheme.secondaryText)
+                                .lineLimit(1)
+                            }
+
+                            Spacer(minLength: 6)
+                            Image(systemName: "arrow.up.left")
+                                .font(KinemaType.metadataStrong)
+                                .foregroundStyle(KinemaTheme.secondaryText)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(KinemaTheme.hairline.opacity(0.78), lineWidth: 0.6)
+                        }
+                        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var pageHorizontalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 18 : 28
+    }
+
+    private var recentColumns: [GridItem] {
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible(), spacing: 12)]
+        }
+        return [GridItem(.adaptive(minimum: 300, maximum: 520), spacing: 12)]
     }
 
     private var parsedURL: URL? {
         let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return URL(string: trimmed)
+        let candidate: String
+        if trimmed.contains("://") || trimmed.lowercased().hasPrefix("kinema:") {
+            candidate = trimmed
+        } else if trimmed.contains(".") && !trimmed.contains(" ") {
+            candidate = "https://\(trimmed)"
+        } else {
+            return nil
+        }
+
+        guard let url = URL(string: candidate), let scheme = url.scheme, scheme.lowercased() != "file" else {
+            return nil
+        }
+        return url
+    }
+
+    private var canDownload: Bool {
+        guard let scheme = parsedURL?.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
 
     private func openURL() {
@@ -470,8 +684,30 @@ public struct OpenStreamView: View {
     }
 
     private func downloadURL() {
-        guard let url = parsedURL else { return }
+        guard let url = parsedURL, canDownload else { return }
         _ = LibraryDownloadService.shared.enqueue(url: url)
         viewModel.showOSD(KinemaCopy.downloadStarted)
+    }
+
+    private func pasteAddress() {
+        #if os(iOS)
+        guard let value = UIPasteboard.general.string else { return }
+        #elseif os(macOS)
+        guard let value = NSPasteboard.general.string(forType: .string) else { return }
+        #else
+        return
+        #endif
+        urlText = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        focused = false
+    }
+
+    private func reloadRecentStreams() {
+        recentStreams = WatchProgressStore.recentEntries(limit: 40)
+            .filter { entry in
+                guard let url = entry.url else { return false }
+                return !url.isFileURL
+            }
+            .prefix(6)
+            .map { $0 }
     }
 }

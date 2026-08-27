@@ -32,6 +32,8 @@ public struct PlayerControlsOverlay: View {
 
     public var body: some View {
         ZStack {
+            chromeScrim
+
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleControls() }
@@ -55,29 +57,56 @@ public struct PlayerControlsOverlay: View {
         }
     }
 
+    private var chromeScrim: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [.black.opacity(0.72), .black.opacity(0.24), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 150)
+
+            Spacer(minLength: 0)
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.32), .black.opacity(0.86)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 240)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
     private var topChrome: some View {
         HStack(spacing: 12) {
             glassCircleButton(size: 44) {
                 viewModel.exitPlayer()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
+                    .font(KinemaType.bodyStrong)
             }
             .accessibilityLabel("Close player")
 
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(.white.opacity(0.95))
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("NOW PLAYING")
+                        .font(KinemaType.eyebrow)
+                        .tracking(1.5)
+                        .foregroundStyle(KinemaTheme.brass.opacity(0.9))
+                    Text(title)
+                        .font(KinemaType.posterTitle)
+                        .lineLimit(1)
+                        .foregroundStyle(.white.opacity(0.95))
+                }
 
                 if viewModel.session.isHDRContent {
                     hdrTitleTag
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(.black.opacity(0.28), in: Capsule())
+            .frame(height: 42)
             .frame(maxWidth: 460, alignment: .leading)
 
             Spacer(minLength: 0)
@@ -91,7 +120,7 @@ public struct PlayerControlsOverlay: View {
                 .font(.system(size: 8, weight: .bold))
                 .symbolRenderingMode(.hierarchical)
             Text("HDR")
-                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .font(KinemaType.playerTag)
                 .tracking(0.4)
         }
         .foregroundStyle(.white)
@@ -123,17 +152,17 @@ public struct PlayerControlsOverlay: View {
                 Spacer()
                 if viewModel.session.isABLooping {
                     Text(KinemaCopy.abLoop)
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .lineLimit(1)
                         .foregroundStyle(accent.opacity(0.95))
                 } else if viewModel.session.hasABLoopA {
                     Text("Loop A set")
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .lineLimit(1)
                         .foregroundStyle(accent.opacity(0.85))
                 } else if let chapter = viewModel.session.currentChapter {
                     Text(chapter.displayTitle)
-                        .font(.caption2.weight(.semibold))
+                        .font(KinemaType.microStrong)
                         .lineLimit(1)
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -141,7 +170,7 @@ public struct PlayerControlsOverlay: View {
                 Text(formatTime(viewModel.session.info.duration))
                     .frame(minWidth: 48, alignment: .trailing)
             }
-            .font(.caption.weight(.semibold).monospacedDigit())
+            .font(KinemaType.timecode)
             .foregroundStyle(.white.opacity(0.88))
 
             PlayerProgressSlider(
@@ -301,7 +330,7 @@ public struct PlayerControlsOverlay: View {
     private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.body.weight(.medium))
+                .font(KinemaType.bodyMedium)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -566,7 +595,7 @@ struct ABLoopMarkerTrack: View {
         let x = width * min(1, max(0, time / safeDuration))
         VStack(spacing: 1) {
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .font(KinemaType.playerMarker)
                 .foregroundStyle(accent)
             Capsule()
                 .fill(accent)

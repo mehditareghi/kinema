@@ -139,9 +139,9 @@ struct PlaybackSpeedControl: View {
         } label: {
             HStack(spacing: 4) {
                 Text(Self.formatSpeed(viewModel.session.info.speed))
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .font(KinemaType.timecodeLabel)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2.weight(.semibold))
+                    .font(KinemaType.microStrong)
                     .foregroundStyle(.white.opacity(0.65))
             }
             .padding(.horizontal, 12)
@@ -210,7 +210,7 @@ private struct ContinuousSpeedSlider: View {
                             .position(x: thumbX, y: midY)
 
                         Text(PlaybackSpeedControl.formatSpeedValue(displayed))
-                            .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                            .font(KinemaType.speedReadout)
                             .foregroundStyle(labelColor)
                             .position(x: thumbX, y: midY + 16)
                     }

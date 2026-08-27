@@ -1,7 +1,7 @@
 import SwiftUI
 import KinemaCore
 
-/// Minimal Kinema mark — wine/cinema-rose K glyph matching the app icon.
+/// The Cut: one image split into two moments and displaced in motion.
 public struct KinemaMark: View {
     let size: CGFloat
 
@@ -10,46 +10,57 @@ public struct KinemaMark: View {
     }
 
     public var body: some View {
-        KinemaKGlyph()
-            .fill(KinemaTheme.accent)
-            .padding(size * 0.14)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        ZStack {
+            KinemaHalfDisc(isTop: true)
+                .fill(KinemaTheme.accent)
+                .frame(width: size * 0.72, height: size * 0.72)
+                .offset(x: size * 0.075, y: -size * 0.055)
+
+            KinemaHalfDisc(isTop: false)
+                .fill(KinemaTheme.paper)
+                .frame(width: size * 0.72, height: size * 0.72)
+                .offset(x: -size * 0.075, y: size * 0.055)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
-struct KinemaKGlyph: Shape {
+private struct KinemaHalfDisc: Shape {
+    let isTop: Bool
+
     func path(in rect: CGRect) -> Path {
-        let w = rect.width
-        let h = rect.height
-        let cx = rect.midX
-        let cy = rect.midY
-        let scale = min(w, h)
-        let t = scale * 0.17
-        let stemLeft = cx - scale * 0.34
-        let stemRight = stemLeft + t
-        let top = cy - scale * 0.46
-        let bottom = cy + scale * 0.46
-        let joint = cy
-
+        let k: CGFloat = 0.5522847498
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let rx = rect.width / 2
+        let ry = rect.height / 2
         var path = Path()
-        path.addRoundedRect(
-            in: CGRect(x: stemLeft, y: top, width: t, height: bottom - top),
-            cornerSize: CGSize(width: t * 0.34, height: t * 0.34)
-        )
 
-        path.move(to: CGPoint(x: stemRight - t * 0.08, y: joint - t * 0.62))
-        path.addLine(to: CGPoint(x: cx + scale * 0.34, y: top + t * 0.35))
-        path.addLine(to: CGPoint(x: cx + scale * 0.34 - t, y: top + t * 0.35 + t * 0.82))
-        path.addLine(to: CGPoint(x: stemRight - t * 0.08, y: joint - t * 0.62 + t * 0.82))
+        path.move(to: CGPoint(x: center.x - rx, y: center.y))
+        if isTop {
+            path.addCurve(
+                to: CGPoint(x: center.x, y: center.y - ry),
+                control1: CGPoint(x: center.x - rx, y: center.y - ry * k),
+                control2: CGPoint(x: center.x - rx * k, y: center.y - ry)
+            )
+            path.addCurve(
+                to: CGPoint(x: center.x + rx, y: center.y),
+                control1: CGPoint(x: center.x + rx * k, y: center.y - ry),
+                control2: CGPoint(x: center.x + rx, y: center.y - ry * k)
+            )
+        } else {
+            path.addCurve(
+                to: CGPoint(x: center.x, y: center.y + ry),
+                control1: CGPoint(x: center.x - rx, y: center.y + ry * k),
+                control2: CGPoint(x: center.x - rx * k, y: center.y + ry)
+            )
+            path.addCurve(
+                to: CGPoint(x: center.x + rx, y: center.y),
+                control1: CGPoint(x: center.x + rx * k, y: center.y + ry),
+                control2: CGPoint(x: center.x + rx, y: center.y + ry * k)
+            )
+        }
         path.closeSubpath()
-
-        path.move(to: CGPoint(x: stemRight - t * 0.08, y: joint + t * 0.62 - t * 0.82))
-        path.addLine(to: CGPoint(x: cx + scale * 0.36, y: bottom - t * 0.35 - t * 0.82))
-        path.addLine(to: CGPoint(x: cx + scale * 0.36 - t, y: bottom - t * 0.35))
-        path.addLine(to: CGPoint(x: stemRight - t * 0.08, y: joint + t * 0.62))
-        path.closeSubpath()
-
         return path
     }
 }
@@ -66,11 +77,12 @@ public struct KinemaBrandHeader: View {
             KinemaMark(size: compact ? 32 : 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Kinema")
-                    .font(compact ? .headline.weight(.semibold) : .title2.weight(.bold))
+                    .font(compact ? KinemaType.cardTitle : KinemaType.title)
                 if !compact {
-                    Text("κίνημα · motion")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("YOUR PRIVATE SCREENING ROOM")
+                        .font(KinemaType.eyebrow)
+                        .tracking(1.5)
+                        .foregroundStyle(KinemaTheme.brass.opacity(0.78))
                 }
             }
             Spacer(minLength: 0)
@@ -86,23 +98,24 @@ public struct KinemaEmptyState: View {
     }
 
     public var body: some View {
-        VStack(spacing: 28) {
-            KinemaMark(size: 88)
+        VStack(spacing: 30) {
+            KinemaMark(size: 82)
                 .padding(.bottom, 4)
 
-            VStack(spacing: 8) {
-                Text("Nothing playing")
-                    .font(.title2.weight(.semibold))
-                Text("Open a video from the library or drop a file here.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 10) {
+                Text("The screen is waiting")
+                    .font(KinemaType.title)
+                    .foregroundStyle(KinemaTheme.paper)
+                Text("Choose a film from your collection, or bring something new to tonight’s programme.")
+                    .font(KinemaType.label)
+                    .foregroundStyle(KinemaTheme.secondaryText)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 390)
             }
 
             Button(action: onOpenFiles) {
-                Label("Open Media", systemImage: "folder")
-                    .font(.headline)
+                Label("Choose a Film", systemImage: "play.rectangle.fill")
+                    .font(KinemaType.control)
             }
             .buttonStyle(.borderedProminent)
             .tint(KinemaTheme.accent)
@@ -110,5 +123,6 @@ public struct KinemaEmptyState: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)
+        .background(KinemaBackdrop())
     }
 }

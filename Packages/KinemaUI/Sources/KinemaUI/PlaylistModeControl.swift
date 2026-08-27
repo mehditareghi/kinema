@@ -26,7 +26,7 @@ struct PlaylistModeControl: View {
             }
         } label: {
             Image(systemName: mode.systemImage)
-                .font(.body.weight(.medium))
+                .font(KinemaType.bodyMedium)
                 .frame(width: 44, height: 44)
                 .foregroundStyle(mode == .off ? Color.white : accent)
                 .contentShape(Rectangle())

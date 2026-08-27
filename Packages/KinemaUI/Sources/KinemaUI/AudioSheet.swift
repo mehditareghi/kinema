@@ -31,7 +31,7 @@ public struct AudioSheet: View {
                     compressorCard
                     pitchCard
                     Text("Preferred language, Replay Gain, output device, and visualizations are in Preferences.")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
                 }
@@ -82,7 +82,7 @@ public struct AudioSheet: View {
                 Button("Cycle audio") {
                     session.cycleAudio()
                 }
-                .font(.subheadline.weight(.medium))
+                .font(KinemaType.label)
             }
         }
     }
@@ -90,7 +90,7 @@ public struct AudioSheet: View {
     private func trackRow(title: String, selected: Bool) -> some View {
         HStack {
             Text(title)
-                .font(.subheadline)
+                .font(KinemaType.labelRegular)
                 .foregroundStyle(.primary)
             Spacer()
             if selected {
@@ -108,7 +108,7 @@ public struct AudioSheet: View {
                 Text("Level")
                 Spacer()
                 Text("\(Int(session.info.volume.rounded()))%")
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -152,9 +152,9 @@ public struct AudioSheet: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(AudioEqualizerCatalog.preset(id: preferences.preferences.audioEqualizerPresetID).displayName)
-                            .font(.subheadline.weight(.medium))
+                            .font(KinemaType.label)
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2.weight(.semibold))
+                            .font(KinemaType.microStrong)
                             .foregroundStyle(accent)
                     }
                 }
@@ -165,7 +165,7 @@ public struct AudioSheet: View {
                 Text("Preamp")
                 Spacer()
                 Text(String(format: "%+.1f dB", preferences.preferences.audioEqualizerPreamp))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -185,7 +185,7 @@ public struct AudioSheet: View {
             ForEach(0..<10, id: \.self) { index in
                 HStack(spacing: 10) {
                     Text(AudioEqualizerCatalog.bandLabels[index])
-                        .font(.caption.monospacedDigit())
+                        .font(KinemaType.timecode)
                         .frame(width: 36, alignment: .leading)
                         .foregroundStyle(.secondary)
                     Slider(
@@ -207,7 +207,7 @@ public struct AudioSheet: View {
                     .tint(accent)
                     Text(String(format: "%+.0f", index < preferences.preferences.audioEqualizerBands.count
                                ? preferences.preferences.audioEqualizerBands[index] : 0))
-                        .font(.caption2.monospacedDigit())
+                        .font(KinemaType.timecodeSmall)
                         .foregroundStyle(.secondary)
                         .frame(width: 28, alignment: .trailing)
                 }
@@ -234,9 +234,9 @@ public struct AudioSheet: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text(preferences.preferences.audioChannelMode.displayName)
-                            .font(.subheadline.weight(.medium))
+                            .font(KinemaType.label)
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2.weight(.semibold))
+                            .font(KinemaType.microStrong)
                             .foregroundStyle(accent)
                     }
                 }
@@ -254,7 +254,7 @@ public struct AudioSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Force mono")
                     Text("Downmix all channels to mono.")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -268,7 +268,7 @@ public struct AudioSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Normalize volume")
                     Text("Smooth quiet and loud passages.")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -278,7 +278,7 @@ public struct AudioSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Headphone virtualization")
                     Text("Earwax crossfeed for headphones.")
-                        .font(.caption)
+                        .font(KinemaType.metadata)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -294,7 +294,7 @@ public struct AudioSheet: View {
                     Text("Width")
                     Spacer()
                     Text(String(format: "%.1f", preferences.preferences.audioStereoWidenerAmount))
-                        .font(.caption.monospacedDigit())
+                        .font(KinemaType.timecode)
                         .foregroundStyle(.secondary)
                 }
                 Slider(
@@ -320,7 +320,7 @@ public struct AudioSheet: View {
                     Text("Amount")
                     Spacer()
                     Text(String(format: "%.0f%%", preferences.preferences.audioSpatializerAmount * 100))
-                        .font(.caption.monospacedDigit())
+                        .font(KinemaType.timecode)
                         .foregroundStyle(.secondary)
                 }
                 Slider(
@@ -387,7 +387,7 @@ public struct AudioSheet: View {
                 Text("Pitch scale")
                 Spacer()
                 Text(String(format: "%.2f×", preferences.preferences.audioPitchScale))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(
@@ -407,7 +407,7 @@ public struct AudioSheet: View {
                 preferences.preferences.audioPitchScale = 1
                 session.applyAudioPipeline()
             }
-            .font(.subheadline.weight(.medium))
+            .font(KinemaType.label)
         }
     }
 
@@ -445,7 +445,7 @@ public struct AudioSheet: View {
                 Text(title)
                 Spacer()
                 Text(valueText)
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(value: value, in: range)

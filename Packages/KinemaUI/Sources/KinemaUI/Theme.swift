@@ -7,22 +7,187 @@ import UIKit
 #endif
 
 public enum KinemaTheme {
-    /// Kinema brand wine / cinema rose — κίνημα · your cinema.
-    public static let accent = Color(red: 0.769, green: 0.357, blue: 0.416)
+    /// Semantic colours shared by the warm-paper and auditorium appearances.
+    public static let accent = adaptive(light: 0xA73531, dark: 0xDF5A52)
+    public static let brass = adaptive(light: 0x9A651F, dark: 0xE5B56B)
+    public static let ink = adaptive(light: 0xF1E9DC, dark: 0x090807)
+    public static let auditorium = adaptive(light: 0xFAF6EE, dark: 0x12100F)
+    public static let velvet = adaptive(light: 0x7B201E, dark: 0x350E0C)
+    public static let paper = adaptive(light: 0x211B18, dark: 0xF2E9D8)
+    public static let projectorWhite = Color(red: 0.965, green: 0.929, blue: 0.863)
+    public static let secondaryText = adaptive(light: 0x675E57, dark: 0xB8ADA0)
+    public static let hairline = adaptive(light: 0xD7CCBD, dark: 0x3A332E)
 
     public static let playerBackground = Color.black
-    public static let glassBackground = Color.white.opacity(0.08)
-    public static let glassBorder = Color.white.opacity(0.15)
+    public static let glassBackground = adaptive(light: 0xFFFDF8, dark: 0x201C19).opacity(0.86)
+    public static let glassBorder = hairline.opacity(0.72)
+    public static let sidebarBackground = adaptive(light: 0xEDE3D5, dark: 0x0C0A09)
+    public static let settingsBackground = auditorium
+    public static let cardBackground = adaptive(light: 0xFFFDF9, dark: 0x201C19).opacity(0.92)
+    public static let raisedBackground = adaptive(light: 0xFFFFFF, dark: 0x2A2420)
 
     #if os(macOS)
-    public static let sidebarBackground = Color(nsColor: .windowBackgroundColor)
-    public static let settingsBackground = Color(nsColor: .windowBackgroundColor)
-    public static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let value = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            return nsColor(value)
+        })
+    }
+
+    private static func nsColor(_ value: UInt32) -> NSColor {
+        NSColor(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255,
+            alpha: 1
+        )
+    }
     #else
-    public static let sidebarBackground = Color(uiColor: .systemGroupedBackground)
-    public static let settingsBackground = Color(uiColor: .systemGroupedBackground)
-    public static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(uiColor: UIColor { traits in
+            uiColor(traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
+    private static func uiColor(_ value: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255,
+            alpha: 1
+        )
+    }
     #endif
+}
+
+public enum KinemaType {
+    // Editorial hierarchy — the voice of programmes, titles, and films.
+    public static let display = Font.system(size: 40, weight: .bold, design: .serif)
+    public static let pageTitle = Font.system(.largeTitle, design: .serif, weight: .bold)
+    public static let title = Font.system(.title2, design: .serif, weight: .semibold)
+    public static let subtitle = Font.system(.title3, design: .serif, weight: .semibold)
+    public static let cardTitle = Font.system(.headline, design: .serif, weight: .semibold)
+    public static let posterTitle = Font.system(.subheadline, design: .serif, weight: .semibold)
+
+    // Reading and interaction — quiet, consistent, and highly legible.
+    public static let body = Font.system(.body, design: .default, weight: .regular)
+    public static let bodyMedium = Font.system(.body, design: .default, weight: .medium)
+    public static let bodyStrong = Font.system(.body, design: .default, weight: .semibold)
+    public static let labelRegular = Font.system(.subheadline, design: .default, weight: .regular)
+    public static let label = Font.system(.subheadline, design: .default, weight: .medium)
+    public static let labelStrong = Font.system(.subheadline, design: .default, weight: .semibold)
+    public static let metadata = Font.system(.caption, design: .default, weight: .regular)
+    public static let metadataMedium = Font.system(.caption, design: .default, weight: .medium)
+    public static let metadataStrong = Font.system(.caption, design: .default, weight: .semibold)
+    public static let metadataBold = Font.system(.caption, design: .default, weight: .bold)
+    public static let micro = Font.system(.caption2, design: .default, weight: .regular)
+    public static let microMedium = Font.system(.caption2, design: .default, weight: .medium)
+    public static let microStrong = Font.system(.caption2, design: .default, weight: .semibold)
+    public static let microBold = Font.system(.caption2, design: .default, weight: .bold)
+    public static let note = Font.system(.footnote, design: .default, weight: .regular)
+    public static let noteStrong = Font.system(.footnote, design: .default, weight: .bold)
+    public static let eyebrow = Font.system(size: 10, weight: .bold, design: .default)
+
+    // Purposeful exceptions: tactile controls, time, and technical strings.
+    public static let control = Font.system(.body, design: .rounded, weight: .semibold)
+    public static let controlLabel = Font.system(.subheadline, design: .rounded, weight: .semibold)
+    public static let timecode = Font.system(.caption, design: .monospaced, weight: .semibold)
+    public static let timecodeSmall = Font.system(.caption2, design: .monospaced, weight: .semibold)
+    public static let timecodeLabel = Font.system(.subheadline, design: .monospaced, weight: .semibold)
+    public static let code = Font.system(.body, design: .monospaced, weight: .regular)
+    public static let codeSmall = Font.system(.caption, design: .monospaced, weight: .regular)
+    public static let playerTag = Font.system(size: 10, weight: .heavy, design: .rounded)
+    public static let playerMarker = Font.system(size: 8, weight: .bold, design: .rounded)
+    public static let speedReadout = Font.system(size: 9, weight: .semibold, design: .monospaced)
+}
+
+public extension AppAppearance {
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
+/// Shared atmospheric background for browsing surfaces. It suggests projector
+/// light and theatre velvet without competing with poster artwork.
+public struct KinemaBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    public init() {}
+
+    public var body: some View {
+        ZStack {
+            KinemaTheme.auditorium
+
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.42),
+                    .init(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.025), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            RadialGradient(
+                stops: [
+                    .init(color: KinemaTheme.velvet.opacity(colorScheme == .dark ? 0.30 : 0.10), location: 0),
+                    .init(color: KinemaTheme.velvet.opacity(colorScheme == .dark ? 0.10 : 0.035), location: 0.44),
+                    .init(color: .clear, location: 1)
+                ],
+                center: UnitPoint(x: 0.08, y: 0.02),
+                startRadius: 0,
+                endRadius: 720
+            )
+
+            RadialGradient(
+                stops: [
+                    .init(color: KinemaTheme.brass.opacity(colorScheme == .dark ? 0.09 : 0.065), location: 0),
+                    .init(color: KinemaTheme.brass.opacity(0.025), location: 0.50),
+                    .init(color: .clear, location: 1)
+                ],
+                center: UnitPoint(x: 0.88, y: 0.04),
+                startRadius: 0,
+                endRadius: 680
+            )
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+}
+
+public struct KinemaSectionTitle: View {
+    let title: String
+    let systemImage: String?
+
+    public init(_ title: String, systemImage: String? = nil) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    public var body: some View {
+        HStack(spacing: 9) {
+            Rectangle()
+                .fill(KinemaTheme.accent)
+                .frame(width: 3, height: 18)
+
+            Text(title.uppercased())
+                .font(KinemaType.eyebrow)
+                .tracking(1.8)
+                .foregroundStyle(KinemaTheme.paper.opacity(0.86))
+
+            Spacer(minLength: 0)
+
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(KinemaType.metadataStrong)
+                    .foregroundStyle(KinemaTheme.brass.opacity(0.75))
+            }
+        }
+    }
 }
 
 public struct GlassBackground: ViewModifier {
@@ -37,7 +202,7 @@ public struct GlassBackground: ViewModifier {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.16), .white.opacity(0.05), .clear],
+                                    colors: [.white.opacity(0.20), .white.opacity(0.045), .clear],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -47,14 +212,14 @@ public struct GlassBackground: ViewModifier {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .strokeBorder(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.38), .white.opacity(0.1)],
+                                    colors: [Color.white.opacity(0.24), KinemaTheme.hairline.opacity(0.52)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 0.5
                             )
                     }
-                    .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+                    .shadow(color: .black.opacity(0.42), radius: 22, y: 10)
             }
     }
 }
@@ -144,7 +309,7 @@ public struct KinemaCard<Content: View>: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label(title, systemImage: icon)
-                .font(.headline)
+                .font(KinemaType.cardTitle)
                 .foregroundStyle(.primary)
 
             VStack(alignment: .leading, spacing: 12) {
@@ -156,8 +321,9 @@ public struct KinemaCard<Content: View>: View {
         .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                .strokeBorder(KinemaTheme.hairline.opacity(0.78), lineWidth: 0.6)
         }
+        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
     }
 }
 
@@ -175,17 +341,17 @@ public struct KinemaSheetHero: View {
     public var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(KinemaType.title)
                 .foregroundStyle(KinemaTheme.accent)
                 .frame(width: 48, height: 48)
                 .background(KinemaTheme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline.weight(.semibold))
+                    .font(KinemaType.cardTitle)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -194,7 +360,11 @@ public struct KinemaSheetHero: View {
         .padding(18)
         .background(
             LinearGradient(
-                colors: [KinemaTheme.accent.opacity(0.18), KinemaTheme.cardBackground],
+                stops: [
+                    .init(color: KinemaTheme.accent.opacity(0.16), location: 0),
+                    .init(color: KinemaTheme.velvet.opacity(0.08), location: 0.42),
+                    .init(color: KinemaTheme.cardBackground, location: 1)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -202,7 +372,7 @@ public struct KinemaSheetHero: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                .strokeBorder(KinemaTheme.hairline.opacity(0.78), lineWidth: 0.6)
         }
     }
 }
@@ -233,11 +403,11 @@ public struct SubtitlePlacementGrid: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(KinemaType.label)
                 Spacer()
                 Text(selection.accessibilityLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
             }
 
             VStack(spacing: 6) {

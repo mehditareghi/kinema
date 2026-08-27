@@ -20,43 +20,65 @@ struct RecentLibraryView: View {
     var body: some View {
         Group {
             if entries.isEmpty {
-                ContentUnavailableView(
-                    KinemaCopy.nothingToContinueTitle,
-                    systemImage: "play.circle",
-                    description: Text(KinemaCopy.nothingToContinueMessage)
-                )
+                VStack(spacing: 16) {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 42, weight: .light))
+                        .foregroundStyle(KinemaTheme.brass)
+                    Text(KinemaCopy.nothingToContinueTitle)
+                        .font(KinemaType.title)
+                        .foregroundStyle(KinemaTheme.paper)
+                    Text(KinemaCopy.nothingToContinueMessage)
+                        .font(KinemaType.label)
+                        .foregroundStyle(KinemaTheme.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(30)
             } else {
                 ScrollView {
-                    LazyVGrid(
-                        columns: MediaLibraryLayout.posterColumns(horizontalSizeClass: horizontalSizeClass),
-                        spacing: MediaLibraryLayout.gridSpacing(horizontalSizeClass: horizontalSizeClass)
-                    ) {
-                        ForEach(entries) { entry in
-                            Button {
-                                guard entry.url != nil, !viewModel.isOpeningMedia else { return }
-                                playFrom(entry, audioOnly: false)
-                            } label: {
-                                if let url = entry.url {
-                                    MediaPosterCard(
-                                        url: url,
-                                        title: entry.title,
-                                        progress: entry,
-                                        accent: accent
-                                    )
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("RETURN TO THE STORY")
+                                .font(KinemaType.eyebrow)
+                                .tracking(2.1)
+                                .foregroundStyle(KinemaTheme.brass)
+                            Text(KinemaCopy.continue)
+                                .font(KinemaType.pageTitle)
+                                .foregroundStyle(KinemaTheme.paper)
+                        }
+
+                        LazyVGrid(
+                            columns: MediaLibraryLayout.posterColumns(horizontalSizeClass: horizontalSizeClass),
+                            spacing: MediaLibraryLayout.gridSpacing(horizontalSizeClass: horizontalSizeClass)
+                        ) {
+                            ForEach(entries) { entry in
+                                Button {
+                                    guard entry.url != nil, !viewModel.isOpeningMedia else { return }
+                                    playFrom(entry, audioOnly: false)
+                                } label: {
+                                    if let url = entry.url {
+                                        MediaPosterCard(
+                                            url: url,
+                                            title: entry.title,
+                                            progress: entry,
+                                            accent: accent
+                                        )
+                                    }
                                 }
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(entry.url == nil)
-                            .contextMenu {
-                                recentContextMenu(for: entry)
+                                .buttonStyle(.plain)
+                                .disabled(entry.url == nil)
+                                .contextMenu {
+                                    recentContextMenu(for: entry)
+                                }
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 24)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(KinemaBackdrop())
         .alert("Rename", isPresented: Binding(
             get: { renameEntry != nil },
             set: { if !$0 { renameEntry = nil } }

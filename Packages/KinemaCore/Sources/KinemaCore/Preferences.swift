@@ -1,5 +1,29 @@
 import Foundation
 
+public enum AppAppearance: String, CaseIterable, Identifiable, Sendable, Codable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.stars.fill"
+        }
+    }
+}
+
 public struct SubtitleFontOption: Identifiable, Hashable, Sendable {
     public let id: String
     public let displayName: String
@@ -140,6 +164,7 @@ public struct KinemaPreferences: Sendable {
     }
 
     public var volume: Double
+    public var appearance: AppAppearance
     public var isMuted: Bool
     public var speed: Double
     public var resumePlayback: Bool
@@ -209,6 +234,7 @@ public struct KinemaPreferences: Sendable {
 
     public init(
         volume: Double = 100,
+        appearance: AppAppearance = .system,
         isMuted: Bool = false,
         speed: Double = 1,
         resumePlayback: Bool = true,
@@ -269,6 +295,7 @@ public struct KinemaPreferences: Sendable {
         audioSpatializerAmount: Double = 0.35
     ) {
         self.volume = min(Self.volumeMax, max(0, volume))
+        self.appearance = appearance
         self.isMuted = isMuted
         self.speed = speed
         self.resumePlayback = resumePlayback
@@ -338,6 +365,7 @@ public final class PreferencesStore {
     private let defaults = UserDefaults.standard
     private enum Keys {
         static let volume = "kinema.volume"
+        static let appearance = "kinema.appearance"
         static let isMuted = "kinema.isMuted"
         static let speed = "kinema.speed"
         static let resumePlayback = "kinema.resumePlayback"
@@ -414,6 +442,7 @@ public final class PreferencesStore {
         videoFilters = Self.loadVideoFilters(from: defaults)
         preferences = KinemaPreferences(
             volume: defaults.object(forKey: Keys.volume) as? Double ?? 100,
+            appearance: AppAppearance(rawValue: defaults.string(forKey: Keys.appearance) ?? "system") ?? .system,
             isMuted: defaults.object(forKey: Keys.isMuted) as? Bool ?? false,
             speed: defaults.object(forKey: Keys.speed) as? Double ?? 1,
             resumePlayback: defaults.object(forKey: Keys.resumePlayback) as? Bool ?? true,
@@ -477,6 +506,7 @@ public final class PreferencesStore {
 
     private func persist() {
         defaults.set(preferences.volume, forKey: Keys.volume)
+        defaults.set(preferences.appearance.rawValue, forKey: Keys.appearance)
         defaults.set(preferences.isMuted, forKey: Keys.isMuted)
         defaults.set(preferences.speed, forKey: Keys.speed)
         defaults.set(preferences.resumePlayback, forKey: Keys.resumePlayback)

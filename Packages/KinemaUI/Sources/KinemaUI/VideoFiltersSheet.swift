@@ -86,7 +86,7 @@ public struct VideoFiltersSheet: View {
             Toggle("Deband", isOn: filterBinding(\.debandEnabled))
                 .tint(accent)
             Text("Smooths banding in gradients and dark scenes.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
 
             filterSlider(
@@ -96,7 +96,7 @@ public struct VideoFiltersSheet: View {
                 format: { String(format: "%.1f", $0) }
             )
             Text("0 is off. Higher values can look harsh on soft sources.")
-                .font(.caption)
+                .font(KinemaType.metadata)
                 .foregroundStyle(.secondary)
         }
     }
@@ -122,7 +122,7 @@ public struct VideoFiltersSheet: View {
                 Text(title)
                 Spacer()
                 Text(format?(value.wrappedValue) ?? Self.formatEqualizer(value.wrappedValue))
-                    .font(.caption.monospacedDigit())
+                    .font(KinemaType.timecode)
                     .foregroundStyle(.secondary)
             }
             Slider(value: value, in: range)

@@ -329,7 +329,7 @@ struct PlayerSideGestureOverlay: View {
             .frame(height: 112)
 
             Text("\(percent)%")
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .font(KinemaType.timecodeSmall)
                 .foregroundStyle(.white.opacity(0.78))
                 .frame(width: 40, alignment: .center)
                 .lineLimit(1)

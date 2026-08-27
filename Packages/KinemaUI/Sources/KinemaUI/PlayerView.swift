@@ -204,16 +204,18 @@ public struct PlayerView: View {
 
 public struct RootView: View {
     @Environment(PlayerViewModel.self) private var viewModel
+    @Bindable private var preferences = PreferencesStore.shared
 
     public init() {}
 
     public var body: some View {
         @Bindable var viewModel = viewModel
 
-        #if os(tvOS)
-        PlayerView(viewModel: viewModel)
-        #else
-        ZStack {
+        Group {
+            #if os(tvOS)
+            PlayerView(viewModel: viewModel)
+            #else
+            ZStack {
             // Keep the GLES / OpenGL surface out of the hierarchy until playback.
             // Mounting it under opacity 0 still lays it out and can burn CPU.
             if viewModel.isInPlayer {
@@ -227,12 +229,15 @@ public struct RootView: View {
                 .opacity(viewModel.isInPlayer ? 0 : 1)
                 .allowsHitTesting(!viewModel.isInPlayer)
                 .accessibilityHidden(viewModel.isInPlayer)
+            }
+            .animation(.easeInOut(duration: 0.28), value: viewModel.appMode)
+            #if os(macOS)
+            .onAppear { viewModel.prepare() }
+            #endif
+            #endif
         }
-        .animation(.easeInOut(duration: 0.28), value: viewModel.appMode)
-        #if os(macOS)
-        .onAppear { viewModel.prepare() }
-        #endif
-        #endif
+        .preferredColorScheme(preferences.preferences.appearance.colorScheme)
+        .font(KinemaType.body)
     }
 }
 
@@ -250,7 +255,7 @@ public struct MusicModeView: View {
         VStack(spacing: 20) {
             KinemaMark(size: 56)
             Text(viewModel.session.currentItem?.title ?? "No track")
-                .font(.title3.weight(.semibold))
+                .font(KinemaType.subtitle)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             TransportBar(

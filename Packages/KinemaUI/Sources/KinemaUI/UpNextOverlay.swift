@@ -186,7 +186,7 @@ public struct UpNextOverlay: View {
             )
             .overlay(alignment: .topLeading) {
                 Text(offer.episode?.seasonEpisodeCode ?? KinemaCopy.upNext)
-                    .font(.caption.weight(.bold).monospacedDigit())
+                    .font(KinemaType.timecode.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -202,7 +202,7 @@ public struct UpNextOverlay: View {
                 .frame(width: 7, height: 7)
                 .shadow(color: accent.opacity(0.7), radius: 4)
             Text(KinemaCopy.upNext.uppercased())
-                .font(.caption.weight(.bold))
+                .font(KinemaType.metadataBold)
                 .tracking(1.4)
                 .foregroundStyle(accent)
             Spacer(minLength: 0)
@@ -212,16 +212,16 @@ public struct UpNextOverlay: View {
     private var titles: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(offer.showTitle)
-                .font(.title3.weight(.semibold))
+                .font(KinemaType.subtitle)
                 .foregroundStyle(.white)
                 .lineLimit(2)
             if offer.episode != nil {
                 Text(offer.detailLabel)
-                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .font(KinemaType.timecodeLabel.weight(.medium))
                     .foregroundStyle(.white.opacity(0.72))
             } else if offer.detailLabel != offer.showTitle {
                 Text(offer.detailLabel)
-                    .font(.subheadline.weight(.medium))
+                    .font(KinemaType.label)
                     .foregroundStyle(.white.opacity(0.72))
                     .lineLimit(2)
             }
@@ -234,7 +234,7 @@ public struct UpNextOverlay: View {
 
             Button(action: onCancel) {
                 Text(KinemaCopy.upNextCancel)
-                    .font(.subheadline.weight(.semibold))
+                    .font(KinemaType.labelStrong)
                     .foregroundStyle(.white.opacity(0.78))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
@@ -261,22 +261,22 @@ public struct UpNextOverlay: View {
                         .frame(width: 34, height: 34)
                         .rotationEffect(.degrees(-90))
                     Text("\(max(0, Int(ceil(remaining))))")
-                        .font(.caption.weight(.bold).monospacedDigit())
+                        .font(KinemaType.timecode.weight(.bold))
                         .foregroundStyle(.white)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(KinemaCopy.upNextPlayNow)
-                        .font(.subheadline.weight(.semibold))
+                        .font(KinemaType.labelStrong)
                     Text("\(KinemaCopy.upNextPlayingIn) \(max(0, Int(ceil(remaining))))s")
-                        .font(.caption2)
+                        .font(KinemaType.micro)
                         .foregroundStyle(.white.opacity(0.78))
                 }
 
                 Spacer(minLength: 0)
 
                 Image(systemName: "play.fill")
-                    .font(.footnote.weight(.bold))
+                    .font(KinemaType.noteStrong)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 14)

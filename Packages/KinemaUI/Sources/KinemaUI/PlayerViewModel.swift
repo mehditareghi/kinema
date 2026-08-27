@@ -319,6 +319,7 @@ public enum LibrarySection: String, CaseIterable, Identifiable {
     case collection = "Collection"
     case continueWatching = "Continue"
     case stream = "Stream"
+    case preferences = "Preferences"
 
     public var id: String { rawValue }
 
@@ -326,13 +327,14 @@ public enum LibrarySection: String, CaseIterable, Identifiable {
     public static var primaryCases: [LibrarySection] { [.collection, .continueWatching] }
 
     /// Compact tab bar destinations, Apple order: browse → open stream → resume.
-    public static var tabCases: [LibrarySection] { [.collection, .stream, .continueWatching] }
+    public static var tabCases: [LibrarySection] { [.collection, .stream, .continueWatching, .preferences] }
 
     public var icon: String {
         switch self {
         case .collection: return "film.stack.fill"
         case .continueWatching: return "play.circle.fill"
         case .stream: return "link"
+        case .preferences: return "slider.horizontal.3"
         }
     }
 
@@ -341,6 +343,7 @@ public enum LibrarySection: String, CaseIterable, Identifiable {
         case .collection: return KinemaCopy.collection
         case .continueWatching: return KinemaCopy.continue
         case .stream: return KinemaCopy.openStreamTitle
+        case .preferences: return KinemaCopy.preferences
         }
     }
 }

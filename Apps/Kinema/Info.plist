@@ -77,14 +77,14 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Kinema uses the local network for Wi‑Fi Sharing so you can upload and download media from a computer on the same network.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp.</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Kinema uses the local network for Wi‑Fi Sharing so you can upload and download media from a computer on the same network.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -154,7 +154,5 @@
 			</dict>
 		</dict>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
 </dict>
 </plist>

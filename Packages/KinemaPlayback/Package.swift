@@ -15,12 +15,13 @@ let package = Package(
         .package(path: "../KinemaCore"),
         .package(path: "../KinemaMPV"),
         .package(path: "../KinemaMedia"),
-        .package(path: "../KinemaSubtitles")
+        .package(path: "../KinemaSubtitles"),
+        .package(path: "../KinemaPlaybill")
     ],
     targets: [
         .target(
             name: "KinemaPlayback",
-            dependencies: ["KinemaCore", "KinemaMPV", "KinemaMedia", "KinemaSubtitles"]
+            dependencies: ["KinemaCore", "KinemaMPV", "KinemaMedia", "KinemaSubtitles", "KinemaPlaybill"]
         )
     ]
 )

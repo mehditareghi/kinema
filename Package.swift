@@ -18,7 +18,8 @@ let package = Package(
         .package(path: "Packages/KinemaUI"),
         .package(path: "Packages/KinemaSubtitles"),
         .package(path: "Packages/KinemaMedia"),
-        .package(path: "Packages/KinemaPlugins")
+        .package(path: "Packages/KinemaPlugins"),
+        .package(path: "Packages/KinemaPlaybill")
     ],
     targets: []
 )

@@ -17,8 +17,9 @@
 		45126EDD8E7C8208654E96BF /* ShareViewController+iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2E7324B091875EF8DFBEDD /* ShareViewController+iOS.swift */; };
 		4992E6463E0AE00FDBBBA5CD /* TopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */; };
 		58C15D21B9C0D55CC7007805 /* TopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C596F1272563C9C825E1729 /* TopShelfContentProvider.swift */; };
-		5A60AE5526F18306BCDC287D /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = A519E8B6ADA39ED2B0B469EF /* GCDWebServer */; };
+		5A60AE5526F18306BCDC287D /* KinemaPlaybill in Frameworks */ = {isa = PBXBuildFile; productRef = 3806C410DC3EF7D3F60DC097 /* KinemaPlaybill */; };
 		5CDC3C89CFCD081E48C541B5 /* MacOSDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */; };
+		6D012A9652737E65BDE60488 /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = 00AEE7D7C0A059D1DC38D9C5 /* GCDWebServer */; };
 		6E1345040C8661F9BE08B58E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */; };
 		748BDEC9D82DB6F1DBB70A05 /* KinemaSharing in Frameworks */ = {isa = PBXBuildFile; productRef = F83440BF1F146382049E9F9F /* KinemaSharing */; };
 		7584055BA1A1710DBD70062B /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = 2ACD2F00070075B72304A9A2 /* KinemaPlugins */; };
@@ -31,6 +32,7 @@
 		917704844F01D70EDF70835B /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = E26103BB742D4DA98F1BFE14 /* KinemaPlugins */; };
 		917725C5E2EA2DEA0327CF80 /* KinemaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 44F5D2FCD8A480B7CB131974 /* KinemaCore */; };
 		A82D111EB039F1977C8AB87C /* KinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */; };
+		B132E881AF5A183BD1C30051 /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = A519E8B6ADA39ED2B0B469EF /* GCDWebServer */; };
 		B5A9E07E76BF8DBEDD71985B /* KinemaShareExtension_macOS.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B7ED04799C331EC47A8CE293 /* KinemaUI in Frameworks */ = {isa = PBXBuildFile; productRef = EEA69E5A5A82C84782AAF3CE /* KinemaUI */; };
 		BEF6AE8D01F8F5C0384922CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */; };
@@ -40,11 +42,12 @@
 		CFAB17C8364F44CC63D807BE /* KinemaCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113709FA613E16376C0625B6 /* KinemaCLI.swift */; };
 		DBA670239E526D1256C6B469 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4E72F89FCFCD0EA9D866285E /* Localizable.xcstrings */; };
 		DC3DC07A27D549612AB404D6 /* KinemaCore in Frameworks */ = {isa = PBXBuildFile; productRef = E40907D44A39E6940231F8C7 /* KinemaCore */; };
+		E532306DE4B2F1DA0AEFAF34 /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = 5F10D38BA0200B934E3B0346 /* GCDWebServer */; };
 		E669D188C207574EECBCFA30 /* MacOSDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CEA941E906E43B030DEF0E /* MacOSDropModifier.swift */; };
 		E96FB8AB03DA4B74FADD241C /* KinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3263E58D66A8FAC5DC2C910B /* KinemaApp.swift */; };
-		F5193B0E60B1953DB9FA24C1 /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = 5F10D38BA0200B934E3B0346 /* GCDWebServer */; };
+		F5193B0E60B1953DB9FA24C1 /* KinemaPlaybill in Frameworks */ = {isa = PBXBuildFile; productRef = B55678EA5E01F511D8F9EA1E /* KinemaPlaybill */; };
 		FB54454B5C6A5863B26740C2 /* KinemaPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = 2664A978B33B299C37556931 /* KinemaPlugins */; };
-		FC6B1CE19FF4F5966D5124DF /* GCDWebServer in Frameworks */ = {isa = PBXBuildFile; productRef = 00AEE7D7C0A059D1DC38D9C5 /* GCDWebServer */; };
+		FC6B1CE19FF4F5966D5124DF /* KinemaPlaybill in Frameworks */ = {isa = PBXBuildFile; productRef = 1E205765F854FE6A21CC09EB /* KinemaPlaybill */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,6 +109,7 @@
 		7D8FB7A8D1C270F88C301A6A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		85DE73CC8BEDC5891AAC1821 /* KinemaShareExtension_macOS.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KinemaShareExtension_macOS.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		88F669202A1D6ACCC962FFE9 /* ShareViewController+macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareViewController+macOS.swift"; sourceTree = "<group>"; };
+		AACC18EBBB1F10490056759A /* KinemaPlaybill */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KinemaPlaybill; path = Packages/KinemaPlaybill; sourceTree = SOURCE_ROOT; };
 		ABA08970933D8E1D6023F21F /* Kinema.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kinema.entitlements; sourceTree = "<group>"; };
 		ABC91ED28305317F3B10CDAF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B12FCC4E4EBAB689396A45BC /* KinemaCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = KinemaCLI; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -136,7 +140,8 @@
 				015C12545B76AE73D1F1260E /* KinemaUI in Frameworks */,
 				917704844F01D70EDF70835B /* KinemaPlugins in Frameworks */,
 				748BDEC9D82DB6F1DBB70A05 /* KinemaSharing in Frameworks */,
-				F5193B0E60B1953DB9FA24C1 /* GCDWebServer in Frameworks */,
+				F5193B0E60B1953DB9FA24C1 /* KinemaPlaybill in Frameworks */,
+				E532306DE4B2F1DA0AEFAF34 /* GCDWebServer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -163,7 +168,8 @@
 				B7ED04799C331EC47A8CE293 /* KinemaUI in Frameworks */,
 				FB54454B5C6A5863B26740C2 /* KinemaPlugins in Frameworks */,
 				845A252E1A97628576C34D79 /* KinemaSharing in Frameworks */,
-				5A60AE5526F18306BCDC287D /* GCDWebServer in Frameworks */,
+				5A60AE5526F18306BCDC287D /* KinemaPlaybill in Frameworks */,
+				B132E881AF5A183BD1C30051 /* GCDWebServer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -174,7 +180,8 @@
 				191A85A50385A445FFFDB0AE /* KinemaUI in Frameworks */,
 				7584055BA1A1710DBD70062B /* KinemaPlugins in Frameworks */,
 				904B63C672B66FDA9323D5C2 /* KinemaSharing in Frameworks */,
-				FC6B1CE19FF4F5966D5124DF /* GCDWebServer in Frameworks */,
+				FC6B1CE19FF4F5966D5124DF /* KinemaPlaybill in Frameworks */,
+				6D012A9652737E65BDE60488 /* GCDWebServer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -287,6 +294,7 @@
 				F9351B728E2BBED573E48F66 /* KinemaMedia */,
 				1CDDAF7D82EBC1A2507FAE60 /* KinemaMPV */,
 				DE117492F7238C47E9A9A659 /* KinemaPlayback */,
+				AACC18EBBB1F10490056759A /* KinemaPlaybill */,
 				0BFFF1C9E74194174906F58D /* KinemaPlugins */,
 				F3B9F2FCB4AF2D928BDCA8F7 /* KinemaSharing */,
 				EEB7F7BF538762F74CC454A0 /* KinemaSubtitles */,
@@ -334,6 +342,7 @@
 				283DFAF09AB900420C147F36 /* KinemaUI */,
 				E26103BB742D4DA98F1BFE14 /* KinemaPlugins */,
 				F83440BF1F146382049E9F9F /* KinemaSharing */,
+				B55678EA5E01F511D8F9EA1E /* KinemaPlaybill */,
 				5F10D38BA0200B934E3B0346 /* GCDWebServer */,
 			);
 			productName = Kinema_tvOS;
@@ -359,6 +368,7 @@
 				4F60428630AC9E1846C40E21 /* KinemaUI */,
 				2ACD2F00070075B72304A9A2 /* KinemaPlugins */,
 				4148F1E30EFA5F83A2967FED /* KinemaSharing */,
+				1E205765F854FE6A21CC09EB /* KinemaPlaybill */,
 				00AEE7D7C0A059D1DC38D9C5 /* GCDWebServer */,
 			);
 			productName = Kinema_iOS;
@@ -403,6 +413,7 @@
 				EEA69E5A5A82C84782AAF3CE /* KinemaUI */,
 				2664A978B33B299C37556931 /* KinemaPlugins */,
 				73DA093102B0311CA0D7E1FA /* KinemaSharing */,
+				3806C410DC3EF7D3F60DC097 /* KinemaPlaybill */,
 				A519E8B6ADA39ED2B0B469EF /* GCDWebServer */,
 			);
 			productName = Kinema_macOS;
@@ -472,6 +483,7 @@
 				0F5597AD2196320C5ED48C0A /* XCLocalSwiftPackageReference "Packages/KinemaMPV" */,
 				EA10D7114311BC438C19500E /* XCLocalSwiftPackageReference "Packages/KinemaMedia" */,
 				F403533468A77A01C135875E /* XCLocalSwiftPackageReference "Packages/KinemaPlayback" */,
+				A77D3090E656C922EE54E51F /* XCLocalSwiftPackageReference "Packages/KinemaPlaybill" */,
 				ABFDD92BEA8F51586612FE4E /* XCLocalSwiftPackageReference "Packages/KinemaPlugins" */,
 				FDDBF86C1F01489027D67585 /* XCLocalSwiftPackageReference "Packages/KinemaSharing" */,
 				665F3FF15FA5FDB5FE9CBCE7 /* XCLocalSwiftPackageReference "Packages/KinemaSubtitles" */,
@@ -1054,6 +1066,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/KinemaUI;
 		};
+		A77D3090E656C922EE54E51F /* XCLocalSwiftPackageReference "Packages/KinemaPlaybill" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/KinemaPlaybill;
+		};
 		ABFDD92BEA8F51586612FE4E /* XCLocalSwiftPackageReference "Packages/KinemaPlugins" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/KinemaPlugins;
@@ -1081,6 +1097,10 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = GCDWebServer;
 		};
+		1E205765F854FE6A21CC09EB /* KinemaPlaybill */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlaybill;
+		};
 		2664A978B33B299C37556931 /* KinemaPlugins */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KinemaPlugins;
@@ -1092,6 +1112,10 @@
 		2ACD2F00070075B72304A9A2 /* KinemaPlugins */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KinemaPlugins;
+		};
+		3806C410DC3EF7D3F60DC097 /* KinemaPlaybill */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlaybill;
 		};
 		4148F1E30EFA5F83A2967FED /* KinemaSharing */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1120,6 +1144,10 @@
 		A519E8B6ADA39ED2B0B469EF /* GCDWebServer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = GCDWebServer;
+		};
+		B55678EA5E01F511D8F9EA1E /* KinemaPlaybill */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KinemaPlaybill;
 		};
 		E26103BB742D4DA98F1BFE14 /* KinemaPlugins */ = {
 			isa = XCSwiftPackageProductDependency;

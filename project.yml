@@ -33,6 +33,8 @@ packages:
     path: Packages/KinemaPlugins
   KinemaSharing:
     path: Packages/KinemaSharing
+  KinemaPlaybill:
+    path: Packages/KinemaPlaybill
   GCDWebServer:
     path: Vendor/GCDWebServer
 
@@ -56,6 +58,7 @@ targetTemplates:
       - package: KinemaUI
       - package: KinemaPlugins
       - package: KinemaSharing
+      - package: KinemaPlaybill
       - package: GCDWebServer
     settings:
       base:

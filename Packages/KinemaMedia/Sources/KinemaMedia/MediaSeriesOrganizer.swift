@@ -101,9 +101,64 @@ public enum MediaSeriesOrganizer {
         return try! NSRegularExpression(pattern: pattern, options: [])
     }()
 
+    private static let volumeEpisodeRegex: NSRegularExpression = {
+        // Love Death Robots Vol 2 E03 / Volume.2.01
+        let pattern = #"(?i)^(.+?)[\.\-_ ]+(?:vol|volume)[\.\-_ ]*(\d{1,2})[\.\-_ ]+(?:(?:e|ep|episode)[\.\-_ ]*)?(\d{1,3})(?:[\.\-_ ].*)?$"#
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
+
+    private static let fillerKeyTokens = ["and", "the", "of", "an", "a"]
+
     /// Parses `Show.S01E02` / `Show_S1E2` / `Show 1x02` style stems from a media URL.
     public static func episodeIdentity(from url: URL) -> MediaEpisodeIdentity? {
         parseEpisode(from: url)?.identity
+    }
+
+    /// Stable key for matching catalog show titles to parsed filenames (`The Boys` → `theboys`).
+    public static func showKey(forTitle title: String) -> String {
+        normalizeKey(title)
+    }
+
+    /// Whether a parsed filename show title likely refers to the same series as a catalog title.
+    public static func showTitleMatches(_ filenameShowTitle: String, catalogTitle: String) -> Bool {
+        showKeysMatch(showKey(forTitle: filenameShowTitle), catalogTitle: catalogTitle)
+    }
+
+    /// Fuzzy show-key match for abbreviations (`ldr`), filler words (`and`), and near titles.
+    public static func showKeysMatch(_ filenameKey: String, catalogTitle: String) -> Bool {
+        let catalogKey = showKey(forTitle: catalogTitle)
+        guard !filenameKey.isEmpty, !catalogKey.isEmpty else { return false }
+        if filenameKey == catalogKey { return true }
+
+        if stripFillerWords(fromKey: filenameKey) == stripFillerWords(fromKey: catalogKey) {
+            return true
+        }
+
+        let acronym = acronymKey(forTitle: catalogTitle)
+        if filenameKey.count >= 2, filenameKey.count <= acronym.count + 2, filenameKey == acronym {
+            return true
+        }
+
+        let strippedFile = stripFillerWords(fromKey: filenameKey)
+        let strippedCatalog = stripFillerWords(fromKey: catalogKey)
+        let minLength = 8
+        if strippedFile.count >= minLength, strippedCatalog.count >= minLength {
+            if strippedFile.contains(strippedCatalog) || strippedCatalog.contains(strippedFile) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Initials from a show title (`Love, Death & Robots` → `ldr`).
+    public static func acronymKey(forTitle title: String) -> String {
+        title.split { !$0.isLetter && !$0.isNumber }
+            .filter { !$0.isEmpty }
+            .compactMap { word in
+                word.first.map { String($0).lowercased() }
+            }
+            .joined()
     }
 
     /// True when both URLs belong to the same parsed show.
@@ -289,6 +344,10 @@ public enum MediaSeriesOrganizer {
     }
 
     private static func parseEpisode(from url: URL) -> ParsedEpisode? {
+        parseStandardEpisode(from: url) ?? parseVolumeEpisode(from: url)
+    }
+
+    private static func parseStandardEpisode(from url: URL) -> ParsedEpisode? {
         let stem = url.deletingPathExtension().lastPathComponent
         let range = NSRange(stem.startIndex..., in: stem)
         guard let match = episodeRegex.firstMatch(in: stem, range: range),
@@ -316,15 +375,53 @@ public enum MediaSeriesOrganizer {
             return nil
         }
 
-        let showRaw = String(stem[showRange])
-            .trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
-        guard !showRaw.isEmpty else { return nil }
+        return makeParsedEpisode(
+            url: url,
+            stem: stem,
+            showRaw: String(stem[showRange]),
+            season: season,
+            episode: episode,
+            suffixStart: episodeEndIndex
+        )
+    }
 
-        let showTitle = formatDisplayName(showRaw)
-        let showKey = normalizeKey(showRaw)
+    private static func parseVolumeEpisode(from url: URL) -> ParsedEpisode? {
+        let stem = url.deletingPathExtension().lastPathComponent
+        let range = NSRange(stem.startIndex..., in: stem)
+        guard let match = volumeEpisodeRegex.firstMatch(in: stem, range: range),
+              match.numberOfRanges >= 4,
+              let showRange = Range(match.range(at: 1), in: stem),
+              let seasonRange = Range(match.range(at: 2), in: stem),
+              let episodeRange = Range(match.range(at: 3), in: stem),
+              let season = Int(stem[seasonRange]),
+              let episode = Int(stem[episodeRange]) else { return nil }
+
+        return makeParsedEpisode(
+            url: url,
+            stem: stem,
+            showRaw: String(stem[showRange]),
+            season: season,
+            episode: episode,
+            suffixStart: episodeRange.upperBound
+        )
+    }
+
+    private static func makeParsedEpisode(
+        url: URL,
+        stem: String,
+        showRaw: String,
+        season: Int,
+        episode: Int,
+        suffixStart: String.Index
+    ) -> ParsedEpisode? {
+        let trimmedShowRaw = showRaw.trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
+        guard !trimmedShowRaw.isEmpty else { return nil }
+
+        let showTitle = formatDisplayName(trimmedShowRaw)
+        let showKey = normalizeKey(trimmedShowRaw)
         guard !showKey.isEmpty else { return nil }
 
-        let suffix = String(stem[episodeEndIndex...])
+        let suffix = String(stem[suffixStart...])
         let part = parsePartNumber(in: suffix)
 
         return ParsedEpisode(
@@ -351,5 +448,13 @@ public enum MediaSeriesOrganizer {
 
     private static func normalizeKey(_ value: String) -> String {
         value.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func stripFillerWords(fromKey key: String) -> String {
+        var result = key
+        for token in fillerKeyTokens {
+            result = result.replacingOccurrences(of: token, with: "")
+        }
+        return result
     }
 }

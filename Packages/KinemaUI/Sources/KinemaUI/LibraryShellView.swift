@@ -124,9 +124,10 @@ public struct LibraryShellView: View {
     private var splitShell: some View {
         NavigationSplitView {
             librarySidebar
-        } detail: {
+        }         detail: {
             NavigationStack {
                 detailContent(for: viewModel.librarySection)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
     }
@@ -136,12 +137,22 @@ public struct LibraryShellView: View {
         switch section {
         case .collection:
             LibraryBrowserView(viewModel: viewModel)
+        case .playbill:
+            PlaybillView(viewModel: viewModel)
         case .continueWatching:
             RecentLibraryView(viewModel: viewModel)
         case .stream:
             OpenStreamView(viewModel: viewModel)
         case .preferences:
-            SettingsView(isStandalone: false)
+            SettingsView(
+                isStandalone: false,
+                initialSection: viewModel.settingsInitialSection
+            )
+            .onAppear {
+                if viewModel.settingsInitialSection != nil {
+                    viewModel.settingsInitialSection = nil
+                }
+            }
         }
     }
 
@@ -459,59 +470,21 @@ public struct OpenStreamView: View {
 
     private var streamComposer: some View {
         KinemaCard(title: KinemaCopy.openStreamFieldLabel, icon: "link") {
-            HStack(spacing: 10) {
-                Image(systemName: "link")
-                    .font(KinemaType.bodyStrong)
-                    .foregroundStyle(parsedURL == nil ? KinemaTheme.secondaryText : accent)
-
-                TextField(KinemaCopy.openStreamPlaceholder, text: $urlText)
-                    .textFieldStyle(.plain)
-                    .font(KinemaType.code)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .submitLabel(.go)
-                    #endif
-                    .focused($focused)
-                    .onSubmit { openURL() }
-
-                if !urlText.isEmpty {
-                    Button {
-                        urlText = ""
-                        focused = true
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(KinemaTheme.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear address")
-                }
-
-                Button(action: pasteAddress) {
-                    Label("Paste", systemImage: "doc.on.clipboard")
-                        .font(KinemaType.labelStrong)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 54)
-            .background(KinemaTheme.raisedBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        focused ? accent.opacity(0.72) : KinemaTheme.hairline.opacity(0.82),
-                        lineWidth: focused ? 1.4 : 0.6
-                    )
-            }
-            .animation(.easeOut(duration: 0.16), value: focused)
+            KinemaComposerField(
+                icon: "link",
+                placeholder: KinemaCopy.openStreamPlaceholder,
+                text: $urlText,
+                isURLField: true,
+                accent: accent,
+                isFocused: $focused,
+                onSubmit: openURL,
+                onPaste: pasteAddress
+            )
 
             streamAddressStatus
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { streamActions }
-                VStack(spacing: 10) { streamActions }
+            KinemaComposerActionLayout {
+                streamActions
             }
 
             HStack(spacing: 8) {
@@ -528,31 +501,23 @@ public struct OpenStreamView: View {
     @ViewBuilder
     private var streamActions: some View {
         Button(action: openURL) {
-            HStack(spacing: 9) {
-                if viewModel.isOpeningMedia {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "play.fill")
-                }
-                Text(viewModel.isOpeningMedia ? "Opening…" : KinemaCopy.openStreamPlay)
-            }
-            .font(KinemaType.control)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            KinemaComposerButtonLabel(
+                viewModel.isOpeningMedia ? "Opening…" : KinemaCopy.openStreamPlay,
+                systemImage: viewModel.isOpeningMedia ? nil : "play.fill",
+                showsProgress: viewModel.isOpeningMedia
+            )
         }
         .buttonStyle(.borderedProminent)
         .tint(accent)
+        .kinemaComposerButtonStyle()
         .disabled(parsedURL == nil || viewModel.isOpeningMedia)
 
         Button(action: downloadURL) {
-            Label(KinemaCopy.downloadToLibrary, systemImage: "arrow.down.circle")
-                .font(KinemaType.control)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
+            KinemaComposerButtonLabel(KinemaCopy.downloadToLibrary, systemImage: "arrow.down.circle")
         }
         .buttonStyle(.bordered)
         .tint(accent)
+        .kinemaComposerButtonStyle()
         .disabled(!canDownload)
         .help(canDownload ? "Download this address into Kinema" : "Downloads require an HTTP or HTTPS address")
     }

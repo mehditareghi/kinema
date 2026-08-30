@@ -12,6 +12,8 @@ public enum KinemaEvent: Sendable {
     case upNextOfferChanged
     case osdMessage(String)
     case watchProgressUpdated
+    case playbillUpdated
+    case playbillMatchPromptRequested
     case resumedFrom(TimeInterval)
     case libraryChanged
 }

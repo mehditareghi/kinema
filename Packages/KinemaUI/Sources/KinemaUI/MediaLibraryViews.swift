@@ -1,5 +1,6 @@
 import SwiftUI
 import KinemaCore
+import KinemaPlaybill
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -56,7 +57,12 @@ struct MediaPosterCard: View {
     let url: URL
     let title: String
     let progress: WatchProgressEntry?
+    var watch: MediaWatchSnapshot?
     let accent: Color
+
+    private var resolvedWatch: MediaWatchSnapshot {
+        watch ?? MediaWatchCoordinator.snapshot(for: url)
+    }
 
     @State private var thumbnail: PlatformImage?
     @State private var probedDuration: TimeInterval?
@@ -64,12 +70,26 @@ struct MediaPosterCard: View {
     @State private var loadFailed = false
 
     private var thumbTime: TimeInterval {
-        VideoThumbnailLoader.preferredTime(for: progress)
+        if let progress, progress.lastPosition > 5 {
+            return VideoThumbnailLoader.preferredTime(for: progress)
+        }
+        if resolvedWatch.resumePosition > 5 {
+            return resolvedWatch.resumePosition
+        }
+        return VideoThumbnailLoader.preferredTime(for: progress)
     }
 
     private var displayDuration: TimeInterval? {
         if let progress, progress.duration > 0 { return progress.duration }
+        if resolvedWatch.resumeDuration > 0 { return resolvedWatch.resumeDuration }
         return probedDuration
+    }
+
+    private var resumeFraction: Double? {
+        guard resolvedWatch.hasPartialResume else { return nil }
+        let duration = resolvedWatch.resumeDuration
+        guard duration > 0 else { return nil }
+        return min(1, max(0, resolvedWatch.resumePosition / duration))
     }
 
     var body: some View {
@@ -100,8 +120,8 @@ struct MediaPosterCard: View {
                     }
                     .padding(10)
 
-                    if let progress, progress.duration > 0, !progress.isMostlyFinished {
-                        progressStrip(progress.progress)
+                    if let fraction = resumeFraction {
+                        progressStrip(fraction)
                     }
 
                     if let qualityLabel, !qualityLabel.isEmpty {
@@ -260,28 +280,30 @@ struct MediaPosterCard: View {
 
     @ViewBuilder
     private var metadataSubtitle: some View {
-        if let progress, progress.duration > 0 {
-            if progress.isMostlyFinished {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(KinemaType.metadataStrong)
-                        .foregroundStyle(accent)
-                    Text("Watched")
-                        .font(KinemaType.metadataMedium)
-                        .foregroundStyle(accent)
+        if resolvedWatch.isWatched, !resolvedWatch.hasPartialResume {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(KinemaType.metadataStrong)
+                    .foregroundStyle(accent)
+                Text(KinemaCopy.watchedLabel(count: resolvedWatch.watchCount))
+                    .font(KinemaType.metadataMedium)
+                    .foregroundStyle(accent)
+                if let duration = displayDuration, duration > 0 {
                     Text("·")
                         .foregroundStyle(.secondary)
-                    Text(formatTime(progress.duration))
+                    Text(formatTime(duration))
                         .foregroundStyle(.secondary)
                 }
-            } else {
-                HStack(spacing: 6) {
-                    Text("Resume \(formatTime(progress.lastPosition))")
-                    Text("·")
-                    Text("\(formatTime(max(0, progress.duration - progress.lastPosition))) left")
-                }
-                .foregroundStyle(.secondary)
             }
+        } else if resolvedWatch.hasPartialResume {
+            HStack(spacing: 6) {
+                Text("Resume \(formatTime(resolvedWatch.resumePosition))")
+                if resolvedWatch.resumeDuration > 0 {
+                    Text("·")
+                    Text("\(formatTime(max(0, resolvedWatch.resumeDuration - resolvedWatch.resumePosition))) left")
+                }
+            }
+            .foregroundStyle(.secondary)
         } else if let displayDuration, displayDuration > 0 {
             HStack(spacing: 6) {
                 Text(formatTime(displayDuration))

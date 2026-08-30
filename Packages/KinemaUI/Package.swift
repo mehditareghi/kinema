@@ -16,12 +16,13 @@ let package = Package(
         .package(path: "../KinemaMedia"),
         .package(path: "../KinemaPlayback"),
         .package(path: "../KinemaSubtitles"),
-        .package(path: "../KinemaSharing")
+        .package(path: "../KinemaSharing"),
+        .package(path: "../KinemaPlaybill")
     ],
     targets: [
         .target(
             name: "KinemaUI",
-            dependencies: ["KinemaCore", "KinemaMedia", "KinemaPlayback", "KinemaSubtitles", "KinemaSharing"],
+            dependencies: ["KinemaCore", "KinemaMedia", "KinemaPlayback", "KinemaSubtitles", "KinemaSharing", "KinemaPlaybill"],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("MediaPlayer"),

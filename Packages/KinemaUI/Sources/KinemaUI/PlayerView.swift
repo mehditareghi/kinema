@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import KinemaCore
 import KinemaPlayback
 import KinemaMPV
+import KinemaPlaybill
 
 public struct PlayerView: View {
     @Bindable var viewModel: PlayerViewModel
@@ -62,6 +63,17 @@ public struct PlayerView: View {
                 .zIndex(5)
             }
 
+            if let prompt = viewModel.playbillMatchPrompt, viewModel.upNextOffer == nil {
+                PlaybillMatchOverlay(
+                    prompt: prompt,
+                    accent: accent,
+                    onConfirm: { viewModel.confirmPlaybillMatch($0) },
+                    onSkip: { viewModel.skipPlaybillMatch() }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(6)
+            }
+
             if preferences.preferences.audioVisualizationEnabled,
                viewModel.isInPlayer,
                viewModel.upNextOffer == nil {
@@ -78,6 +90,7 @@ public struct PlayerView: View {
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: viewModel.showControls)
         .animation(.spring(response: 0.45, dampingFraction: 0.88), value: viewModel.upNextOffer?.id)
+        .animation(.spring(response: 0.45, dampingFraction: 0.88), value: viewModel.playbillMatchPrompt?.id)
         .animation(.easeOut(duration: 0.2), value: preferences.preferences.audioVisualizationEnabled)
         .onChange(of: viewModel.isInPlayer) { _, _ in
             ScreenWakeLock.apply(

@@ -2,6 +2,7 @@ import SwiftUI
 import KinemaCore
 import KinemaPlayback
 import KinemaSharing
+import KinemaPlaybill
 
 public struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -9,10 +10,13 @@ public struct SettingsView: View {
     private var preferences: PreferencesStore { PreferencesStore.shared }
     @State private var fontFamilies: [SubtitleFontOption] = []
     @State private var selectedCategory: SettingsCategory = .appearance
+    @State private var playbillAPIKey = PlaybillPreferencesStore.tmdbAPIKey
     private let isStandalone: Bool
+    private let initialSection: String?
 
-    public init(isStandalone: Bool = true) {
+    public init(isStandalone: Bool = true, initialSection: String? = nil) {
         self.isStandalone = isStandalone
+        self.initialSection = initialSection
     }
 
     public var body: some View {
@@ -38,6 +42,10 @@ public struct SettingsView: View {
             _ = SubtitleFontRegistry.prepare()
             if fontFamilies.isEmpty {
                 fontFamilies = SubtitleFontRegistry.availableFontFamilies()
+            }
+            if let initialSection,
+               let category = SettingsCategory(rawValue: initialSection) {
+                selectedCategory = category
             }
         }
         .tint(KinemaTheme.accent)
@@ -371,6 +379,10 @@ public struct SettingsView: View {
                 WiFiSharingSettingsCard()
             }
 
+            if selectedCategory == .playbill {
+                playbillSettings
+            }
+
             if selectedCategory == .controls {
                 KinemaCard(title: "Keyboard Shortcuts", icon: "keyboard") {
                     KeyBindingsSettingsSection()
@@ -393,6 +405,52 @@ public struct SettingsView: View {
                     LabeledContent("Version", value: "1.0.0")
                     LabeledContent("Engine", value: "libmpv")
                 }
+            }
+        }
+    }
+
+    private var playbillSettings: some View {
+        KinemaCard(title: KinemaCopy.playbillSettingsTitle, icon: "ticket.fill") {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(KinemaCopy.playbillTMDBKey)
+                        .font(KinemaType.labelStrong)
+                    PlaybillTMDBKeyEntry(
+                        apiKey: $playbillAPIKey,
+                        saveTitle: KinemaCopy.save
+                    )
+                }
+
+                Divider()
+
+                SettingsToggleRow(
+                    title: KinemaCopy.playbillAutoScrobble,
+                    subtitle: KinemaCopy.playbillAutoScrobbleSubtitle,
+                    isOn: Binding(
+                        get: { PlaybillPreferencesStore.autoScrobbleEnabled },
+                        set: { PlaybillPreferencesStore.autoScrobbleEnabled = $0 }
+                    )
+                )
+
+                SettingsSliderRow(
+                    title: KinemaCopy.playbillCompletionThreshold,
+                    valueText: "\(Int(PlaybillPreferencesStore.completionThreshold * 100))%",
+                    value: Binding(
+                        get: { PlaybillPreferencesStore.completionThreshold * 100 },
+                        set: { PlaybillPreferencesStore.completionThreshold = $0 / 100 }
+                    ),
+                    range: 90...100,
+                    step: 1
+                )
+
+                SettingsToggleRow(
+                    title: KinemaCopy.playbillScrobbleStreams,
+                    subtitle: KinemaCopy.playbillScrobbleStreamsSubtitle,
+                    isOn: Binding(
+                        get: { PlaybillPreferencesStore.scrobbleStreams },
+                        set: { PlaybillPreferencesStore.scrobbleStreams = $0 }
+                    )
+                )
             }
         }
     }
@@ -457,6 +515,7 @@ public struct SettingsView: View {
 private enum SettingsCategory: String, CaseIterable, Identifiable {
     case appearance
     case playback
+    case playbill
     case audio
     case captions
     case library
@@ -464,7 +523,12 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
     case about
 
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String {
+        switch self {
+        case .playbill: return KinemaCopy.playbillSettingsTitle
+        default: return rawValue.capitalized
+        }
+    }
 
     var systemImage: String {
         switch self {
@@ -473,6 +537,7 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
         case .audio: return "speaker.wave.3"
         case .captions: return "captions.bubble"
         case .library: return "externaldrive"
+        case .playbill: return "ticket.fill"
         case .controls: return "keyboard"
         case .about: return "info.circle"
         }

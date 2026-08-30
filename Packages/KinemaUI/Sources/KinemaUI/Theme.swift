@@ -327,6 +327,156 @@ public struct KinemaCard<Content: View>: View {
     }
 }
 
+/// Shared address / key field used on Open Stream, Playbill setup, and similar forms.
+public struct KinemaComposerField: View {
+    let icon: String
+    let placeholder: String
+    @Binding var text: String
+    var isSecure: Bool = false
+    var isURLField: Bool = false
+    var accent: Color = KinemaTheme.accent
+    @FocusState.Binding var isFocused: Bool
+    var onSubmit: (() -> Void)? = nil
+    var onPaste: (() -> Void)? = nil
+
+    public init(
+        icon: String,
+        placeholder: String,
+        text: Binding<String>,
+        isSecure: Bool = false,
+        isURLField: Bool = false,
+        accent: Color = KinemaTheme.accent,
+        isFocused: FocusState<Bool>.Binding,
+        onSubmit: (() -> Void)? = nil,
+        onPaste: (() -> Void)? = nil
+    ) {
+        self.icon = icon
+        self.placeholder = placeholder
+        self._text = text
+        self.isSecure = isSecure
+        self.isURLField = isURLField
+        self.accent = accent
+        self._isFocused = isFocused
+        self.onSubmit = onSubmit
+        self.onPaste = onPaste
+    }
+
+    private var iconColor: Color {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? KinemaTheme.secondaryText
+            : accent
+    }
+
+    public var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(KinemaType.bodyStrong)
+                .foregroundStyle(iconColor)
+
+            Group {
+                if isSecure {
+                    SecureField(placeholder, text: $text)
+                } else {
+                    TextField(placeholder, text: $text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .font(KinemaType.code)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(isURLField ? .URL : .default)
+            .submitLabel(isURLField ? .go : .done)
+            #endif
+            .focused($isFocused)
+            .onSubmit { onSubmit?() }
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                    isFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(KinemaTheme.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear")
+            }
+
+            if let onPaste {
+                Button(action: onPaste) {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                        .font(KinemaType.metadataStrong)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40)
+        .background(KinemaTheme.raisedBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    isFocused ? accent.opacity(0.72) : KinemaTheme.hairline.opacity(0.82),
+                    lineWidth: isFocused ? 1.4 : 0.6
+                )
+        }
+        .animation(.easeOut(duration: 0.16), value: isFocused)
+    }
+}
+
+/// Responsive action row — side-by-side when wide, stacked when narrow.
+public struct KinemaComposerActionLayout<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    public init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    public var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { content() }
+            VStack(spacing: 8) { content() }
+        }
+    }
+}
+
+public struct KinemaComposerButtonLabel: View {
+    let title: String
+    var systemImage: String? = nil
+    var showsProgress: Bool = false
+
+    public init(_ title: String, systemImage: String? = nil, showsProgress: Bool = false) {
+        self.title = title
+        self.systemImage = systemImage
+        self.showsProgress = showsProgress
+    }
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            if showsProgress {
+                ProgressView()
+                    .controlSize(.small)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .font(KinemaType.controlLabel)
+            }
+            Text(title)
+        }
+        .font(KinemaType.controlLabel)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+}
+
+/// Apply to composer action buttons for consistent compact sizing.
+public extension View {
+    func kinemaComposerButtonStyle() -> some View {
+        controlSize(.small)
+    }
+}
+
 public struct KinemaSheetHero: View {
     let icon: String
     let title: String

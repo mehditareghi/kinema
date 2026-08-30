@@ -4,6 +4,7 @@ import KinemaCore
 import KinemaMPV
 import KinemaMedia
 import KinemaSubtitles
+import KinemaPlaybill
 
 @MainActor
 @Observable
@@ -278,6 +279,7 @@ public final class PlayerSession: PlaybackEngine {
 
         // Mount the player view before starting playback on iOS.
         currentItem = resolvedItem
+        PlaybillScrobbler.resetSession(for: resolvedItem.url)
         tracks = []
         chapters = []
         setUpNextOffer(nil)
@@ -954,9 +956,12 @@ public final class PlayerSession: PlaybackEngine {
 
     public func confirmUpNext() {
         guard let offer = upNextOffer else { return }
-        markCurrentItemWatched()
-        setUpNextOffer(nil)
-        playPlaylistItem(at: offer.playlistIndex, startFromBeginning: true)
+        let nextIndex = offer.playlistIndex
+        Task {
+            await markCurrentItemWatched()
+            setUpNextOffer(nil)
+            playPlaylistItem(at: nextIndex, startFromBeginning: true)
+        }
     }
 
     /// Dismiss the card; credits keep playing (or stay on the finished frame).
@@ -974,10 +979,14 @@ public final class PlayerSession: PlaybackEngine {
         EventBus.shared.emit(.upNextOfferChanged)
     }
 
-    private func markCurrentItemWatched() {
+    private func markCurrentItemWatched() async {
         guard let item = currentItem else { return }
         let duration = max(info.duration, info.position, 1)
-        WatchProgressStore.markWatched(item: item, duration: duration)
+        await MediaWatchCoordinator.markWatched(
+            item: item,
+            duration: duration,
+            source: .player
+        )
         if let context = historyContext {
             HistoryStore.recordPlayback(
                 context: context,
@@ -986,6 +995,14 @@ public final class PlayerSession: PlaybackEngine {
                 duration: duration
             )
         }
+    }
+
+    /// Passive Playbill scrobble defers during Up Next — explicit finish handles those exits.
+    private func shouldDeferPassivePlaybillScrobble() -> Bool {
+        if upNextOffer != nil { return true }
+        guard info.duration > 0 else { return false }
+        let remaining = info.duration - info.position
+        return remaining > 0 && remaining <= UpNextOffer.creditsLeadIn + 2
     }
 
     private struct UpNextCandidate {
@@ -1973,33 +1990,15 @@ public final class PlayerSession: PlaybackEngine {
         guard !isHandlingPlaybackFinish else { return }
         guard state == .playing || state == .paused || state == .loaded else { return }
         isHandlingPlaybackFinish = true
-        defer { isHandlingPlaybackFinish = false }
 
-        stopPositionUpdates()
-        markCurrentItemWatched()
+        Task {
+            defer { isHandlingPlaybackFinish = false }
 
-        // Credits card already visible — freeze on the last frame until Play Now / Not now.
-        if upNextOffer != nil {
-            controller.pause()
-            state = .paused
-            info.isPaused = true
-            EventBus.shared.emit(.stateChanged(state))
-            EventBus.shared.emit(.playbackInfoUpdated(info))
-            return
-        }
+            stopPositionUpdates()
+            await markCurrentItemWatched()
 
-        // Repeat One — restart this title without leaving the player.
-        if playlistMode == .one {
-            controller.seek(to: 0)
-            play()
-            startPositionUpdates()
-            refreshInfo(force: true)
-            return
-        }
-
-        // Series Up Next stays available unless shuffle is intentional randomness.
-        if playlistMode != .shuffle, let candidate = nextUpNextCandidate() {
-            if presentUpNextIfPossible() {
+            // Credits card already visible — freeze on the last frame until Play Now / Not now.
+            if upNextOffer != nil {
                 controller.pause()
                 state = .paused
                 info.isPaused = true
@@ -2008,44 +2007,65 @@ public final class PlayerSession: PlaybackEngine {
                 return
             }
 
-            state = .loading
-            EventBus.shared.emit(.stateChanged(state))
-            playPlaylistItem(at: candidate.playlistIndex, startFromBeginning: true)
-            return
-        }
+            // Repeat One — restart this title without leaving the player.
+            if playlistMode == .one {
+                controller.seek(to: 0)
+                play()
+                startPositionUpdates()
+                refreshInfo(force: true)
+                return
+            }
 
-        switch playlistMode {
-        case .off:
-            if playlistIndex + 1 < playlist.count {
+            // Series Up Next stays available unless shuffle is intentional randomness.
+            if playlistMode != .shuffle, let candidate = nextUpNextCandidate() {
+                if presentUpNextIfPossible() {
+                    controller.pause()
+                    state = .paused
+                    info.isPaused = true
+                    EventBus.shared.emit(.stateChanged(state))
+                    EventBus.shared.emit(.playbackInfoUpdated(info))
+                    return
+                }
+
                 state = .loading
                 EventBus.shared.emit(.stateChanged(state))
-                playPlaylistItem(at: playlistIndex + 1, startFromBeginning: true)
-            } else {
-                state = .idle
-                EventBus.shared.emit(.playlistEnded)
-            }
-        case .all:
-            guard !playlist.isEmpty else {
-                state = .idle
-                EventBus.shared.emit(.playlistEnded)
+                playPlaylistItem(at: candidate.playlistIndex, startFromBeginning: true)
                 return
             }
-            let next = (playlistIndex + 1) % playlist.count
-            state = .loading
-            EventBus.shared.emit(.stateChanged(state))
-            playPlaylistItem(at: next, startFromBeginning: true)
-        case .shuffle:
-            guard let next = nextShuffleIndex(excludingCurrent: true) else {
-                state = .idle
-                EventBus.shared.emit(.playlistEnded)
-                return
+
+            switch playlistMode {
+            case .off:
+                if playlistIndex + 1 < playlist.count {
+                    state = .loading
+                    EventBus.shared.emit(.stateChanged(state))
+                    playPlaylistItem(at: playlistIndex + 1, startFromBeginning: true)
+                } else {
+                    state = .idle
+                    EventBus.shared.emit(.playlistEnded)
+                }
+            case .all:
+                guard !playlist.isEmpty else {
+                    state = .idle
+                    EventBus.shared.emit(.playlistEnded)
+                    return
+                }
+                let next = (playlistIndex + 1) % playlist.count
+                state = .loading
+                EventBus.shared.emit(.stateChanged(state))
+                playPlaylistItem(at: next, startFromBeginning: true)
+            case .shuffle:
+                guard let next = nextShuffleIndex(excludingCurrent: true) else {
+                    state = .idle
+                    EventBus.shared.emit(.playlistEnded)
+                    return
+                }
+                shuffleHistory.append(playlistIndex)
+                state = .loading
+                EventBus.shared.emit(.stateChanged(state))
+                playPlaylistItem(at: next, startFromBeginning: true)
+            case .one:
+                break
             }
-            shuffleHistory.append(playlistIndex)
-            state = .loading
-            EventBus.shared.emit(.stateChanged(state))
-            playPlaylistItem(at: next, startFromBeginning: true)
-        case .one:
-            break
         }
     }
 
@@ -2103,12 +2123,20 @@ public final class PlayerSession: PlaybackEngine {
         lastProgressSave = now
         // Silent + async — notifying the library UI / writing JSON on the main
         // thread was hitching playback every save interval.
-        WatchProgressStore.record(
+        MediaWatchCoordinator.recordProgress(
             item: item,
             position: info.position,
             duration: info.duration,
             notify: false
         )
+        if info.duration > 0, !shouldDeferPassivePlaybillScrobble() {
+            let progress = info.position / info.duration
+            if progress >= PlaybillPreferencesStore.completionThreshold - 0.02 {
+                Task {
+                    await PlaybillScrobbler.evaluate(item: item, position: info.position, duration: info.duration)
+                }
+            }
+        }
     }
 
     private func refreshInfo(force: Bool = false) {
@@ -2136,7 +2164,11 @@ public final class PlayerSession: PlaybackEngine {
         guard WatchProgressStore.hasEstablishedPlayback(position: info.position, duration: info.duration) else {
             return
         }
-        WatchProgressStore.record(item: item, position: info.position, duration: info.duration)
+        MediaWatchCoordinator.recordProgress(
+            item: item,
+            position: info.position,
+            duration: info.duration
+        )
         if let context = historyContext {
             HistoryStore.recordPlayback(
                 context: context,

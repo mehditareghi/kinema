@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import KinemaCore
 import KinemaMedia
 import KinemaPlayback
+import KinemaPlaybill
 
 public struct LibraryBrowserView: View {
     @Bindable var viewModel: PlayerViewModel
@@ -147,7 +148,7 @@ public struct LibraryBrowserView: View {
             reloadIfNeeded()
             progressToken = EventBus.shared.subscribe { event in
                 switch event {
-                case .watchProgressUpdated, .libraryChanged:
+                case .watchProgressUpdated, .libraryChanged, .playbillUpdated:
                     Task { @MainActor in scheduleReload() }
                 default:
                     break
@@ -394,7 +395,7 @@ public struct LibraryBrowserView: View {
                             }
 
                             if !folder.videoURLs.isEmpty {
-                                if WatchProgressStore.areAllWatched(folder.videoURLs) {
+                                if MediaWatchCoordinator.areAllWatched(folder.videoURLs) {
                                     Button {
                                         markAllUnwatched(folder.videoURLs)
                                     } label: {
@@ -439,6 +440,7 @@ public struct LibraryBrowserView: View {
                             url: item.url,
                             title: item.url.deletingPathExtension().lastPathComponent,
                             progress: item.progress,
+                            watch: item.watch,
                             accent: accent
                         )
                     }
@@ -726,7 +728,7 @@ public struct LibraryBrowserView: View {
 
         let folderVideos = WatchProgressStore.mediaURLs(under: item.url)
         if !folderVideos.isEmpty {
-            if WatchProgressStore.areAllWatched(folderVideos) {
+            if MediaWatchCoordinator.areAllWatched(folderVideos) {
                 Button {
                     markAllUnwatched(folderVideos)
                 } label: {
@@ -788,7 +790,7 @@ public struct LibraryBrowserView: View {
 
         Divider()
 
-        if item.progress?.isMostlyFinished == true {
+        if item.watch.isWatched {
             Button {
                 markUnwatched(item)
             } label: {
@@ -947,10 +949,12 @@ public struct LibraryBrowserView: View {
             guard stillHere else { return }
 
             let listed = rawItems.map { raw in
-                LibraryItem(
+                let watch = raw.isDirectory ? MediaWatchSnapshot.unwatched : MediaWatchCoordinator.snapshot(for: raw.url)
+                return LibraryItem(
                     url: raw.url,
                     isDirectory: raw.isDirectory,
-                    progress: raw.isDirectory ? nil : WatchProgressStore.entry(for: raw.url)
+                    progress: watch.progress,
+                    watch: watch
                 )
             }
             items = listed
@@ -987,12 +991,12 @@ public struct LibraryBrowserView: View {
 
             var watched = Set<String>()
             for (path, videos) in shallowVideos {
-                if WatchProgressStore.areAllWatched(videos) {
+                if MediaWatchCoordinator.areAllWatched(videos) {
                     watched.insert(path)
                 }
             }
             for (folderID, videoURLs) in virtuals {
-                if WatchProgressStore.areAllWatched(videoURLs) {
+                if MediaWatchCoordinator.areAllWatched(videoURLs) {
                     watched.insert(Self.virtualWatchedKey(folderID))
                 }
             }
@@ -1095,9 +1099,15 @@ public struct LibraryBrowserView: View {
     private func markWatched(_ item: LibraryItem) {
         let mediaItem = MediaItem(url: item.url)
         if let duration = item.progress?.duration, duration > 0 {
-            WatchProgressStore.markWatched(item: mediaItem, duration: duration)
-            reloadIfNeeded()
-            viewModel.showOSD(KinemaCopy.markedWatched)
+            Task {
+                await MediaWatchCoordinator.markWatched(
+                    item: mediaItem,
+                    duration: duration,
+                    source: .manual
+                )
+                reloadIfNeeded()
+                viewModel.showOSD(KinemaCopy.markedWatched)
+            }
             return
         }
 
@@ -1107,26 +1117,30 @@ public struct LibraryBrowserView: View {
                 viewModel.showOSD(KinemaCopy.couldNotMarkWatched)
                 return
             }
-            WatchProgressStore.markWatched(item: mediaItem, duration: duration)
+            await MediaWatchCoordinator.markWatched(
+                item: mediaItem,
+                duration: duration,
+                source: .manual
+            )
             reloadIfNeeded()
             viewModel.showOSD(KinemaCopy.markedWatched)
         }
     }
 
     private func markUnwatched(_ item: LibraryItem) {
-        WatchProgressStore.clearProgress(for: item.url)
+        MediaWatchCoordinator.markUnwatched(url: item.url)
         reloadIfNeeded()
         viewModel.showOSD(KinemaCopy.markedUnwatched)
     }
 
     private func markAllWatched(_ urls: [URL]) {
-        WatchProgressStore.markAllWatched(urls)
+        MediaWatchCoordinator.markAllWatched(urls)
         reloadIfNeeded()
         viewModel.showOSD(KinemaCopy.markedAllWatched)
     }
 
     private func markAllUnwatched(_ urls: [URL]) {
-        WatchProgressStore.markAllUnwatched(urls)
+        MediaWatchCoordinator.markAllUnwatched(urls)
         reloadIfNeeded()
         viewModel.showOSD(KinemaCopy.markedAllUnwatched)
     }
@@ -1300,6 +1314,7 @@ struct LibraryItem: Identifiable {
     let url: URL
     let isDirectory: Bool
     let progress: WatchProgressEntry?
+    let watch: MediaWatchSnapshot
 
     var id: String { url.path }
 }

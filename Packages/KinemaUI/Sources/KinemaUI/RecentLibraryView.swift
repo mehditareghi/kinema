@@ -2,6 +2,7 @@ import SwiftUI
 import KinemaCore
 import KinemaMedia
 import KinemaPlayback
+import KinemaPlaybill
 
 struct RecentLibraryView: View {
     @Bindable var viewModel: PlayerViewModel
@@ -60,6 +61,7 @@ struct RecentLibraryView: View {
                                             url: url,
                                             title: entry.title,
                                             progress: entry,
+                                            watch: MediaWatchCoordinator.snapshot(for: url),
                                             accent: accent
                                         )
                                     }
@@ -110,8 +112,11 @@ struct RecentLibraryView: View {
         .onAppear {
             reload()
             progressToken = EventBus.shared.subscribe { event in
-                if case .watchProgressUpdated = event {
+                switch event {
+                case .watchProgressUpdated, .playbillUpdated:
                     Task { @MainActor in reload() }
+                default:
+                    break
                 }
             }
         }
@@ -146,7 +151,8 @@ struct RecentLibraryView: View {
 
             Divider()
 
-            if entry.isMostlyFinished {
+            let watch = MediaWatchCoordinator.snapshot(for: url)
+            if watch.isWatched {
                 Button {
                     markUnwatched(entry)
                 } label: {
@@ -222,14 +228,20 @@ struct RecentLibraryView: View {
 
     private func markWatched(_ entry: WatchProgressEntry) {
         guard let url = entry.url, entry.duration > 0 else { return }
-        WatchProgressStore.markWatched(item: MediaItem(url: url, title: entry.title), duration: entry.duration)
-        reload()
-        viewModel.showOSD(KinemaCopy.markedWatched)
+        Task {
+            await MediaWatchCoordinator.markWatched(
+                item: MediaItem(url: url, title: entry.title),
+                duration: entry.duration,
+                source: .manual
+            )
+            reload()
+            viewModel.showOSD(KinemaCopy.markedWatched)
+        }
     }
 
     private func markUnwatched(_ entry: WatchProgressEntry) {
         guard let url = entry.url else { return }
-        WatchProgressStore.clearProgress(for: url)
+        MediaWatchCoordinator.markUnwatched(url: url)
         reload()
         viewModel.showOSD(KinemaCopy.markedUnwatched)
     }

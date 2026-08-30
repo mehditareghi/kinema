@@ -88,6 +88,11 @@ public enum WatchProgressStore {
         return memoryIndex?[mediaID(for: url)]
     }
 
+    public static func entry(forMediaID mediaID: String) -> WatchProgressEntry? {
+        _ = loadAll()
+        return memoryIndex?[mediaID]
+    }
+
     @discardableResult
     public static func record(
         item: MediaItem,

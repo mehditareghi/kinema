@@ -2,6 +2,7 @@ import SwiftUI
 import KinemaCore
 import KinemaPlayback
 import KinemaMPV
+import KinemaPlaybill
 #if os(macOS)
 import AppKit
 #endif
@@ -27,7 +28,11 @@ public final class PlayerViewModel {
     public var showSettings = false
     /// Mirrored from the session so SwiftUI reliably refreshes the Up Next card.
     public private(set) var upNextOffer: UpNextOffer?
+    /// Playbill title match confirmation during playback.
+    public private(set) var playbillMatchPrompt: PlaybillMatchPrompt?
     public var librarySection: LibrarySection = .collection
+    /// When set, Preferences opens to this section (e.g. `"playbill"`).
+    public var settingsInitialSection: String?
     public let libraryBrowse = LibraryBrowseState()
 
     private var hideControlsTask: Task<Void, Never>?
@@ -75,6 +80,10 @@ public final class PlayerViewModel {
         showChapters = false
         showSubtitles = false
         showPlaylist = false
+        if let prompt = playbillMatchPrompt {
+            PlaybillScrobbler.decline(prompt)
+            playbillMatchPrompt = nil
+        }
         ScreenWakeLock.setPreventSleep(false)
         NowPlayingController.shared.deactivate()
         session.teardownPlayback()
@@ -309,14 +318,47 @@ public final class PlayerViewModel {
                 cancelAutoHideControls()
                 showControls = false
             }
+        case .playbillMatchPromptRequested:
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+                playbillMatchPrompt = PlaybillPromptCenter.shared.pendingPrompt
+            }
+            if playbillMatchPrompt != nil {
+                cancelAutoHideControls()
+                showControls = false
+            }
         default:
             break
+        }
+    }
+
+    public func openPlaybillSettings() {
+        settingsInitialSection = "playbill"
+        librarySection = .preferences
+    }
+
+    public func confirmPlaybillMatch(_ candidate: PlaybillMatchCandidate) {
+        guard let prompt = playbillMatchPrompt else { return }
+        Task {
+            await PlaybillScrobbler.confirm(prompt, candidate: candidate)
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                playbillMatchPrompt = nil
+            }
+            showOSD(KinemaCopy.playbillLogged)
+        }
+    }
+
+    public func skipPlaybillMatch() {
+        guard let prompt = playbillMatchPrompt else { return }
+        PlaybillScrobbler.decline(prompt)
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            playbillMatchPrompt = nil
         }
     }
 }
 
 public enum LibrarySection: String, CaseIterable, Identifiable {
     case collection = "Collection"
+    case playbill = "Playbill"
     case continueWatching = "Continue"
     case stream = "Stream"
     case preferences = "Preferences"
@@ -324,14 +366,15 @@ public enum LibrarySection: String, CaseIterable, Identifiable {
     public var id: String { rawValue }
 
     /// Sidebar primary rows (Stream lives under Open there).
-    public static var primaryCases: [LibrarySection] { [.collection, .continueWatching] }
+    public static var primaryCases: [LibrarySection] { [.collection, .playbill, .continueWatching] }
 
-    /// Compact tab bar destinations, Apple order: browse → open stream → resume.
-    public static var tabCases: [LibrarySection] { [.collection, .stream, .continueWatching, .preferences] }
+    /// Compact tab bar destinations.
+    public static var tabCases: [LibrarySection] { [.collection, .playbill, .stream, .continueWatching, .preferences] }
 
     public var icon: String {
         switch self {
         case .collection: return "film.stack.fill"
+        case .playbill: return "ticket.fill"
         case .continueWatching: return "play.circle.fill"
         case .stream: return "link"
         case .preferences: return "slider.horizontal.3"
@@ -341,6 +384,7 @@ public enum LibrarySection: String, CaseIterable, Identifiable {
     public var tabTitle: String {
         switch self {
         case .collection: return KinemaCopy.collection
+        case .playbill: return KinemaCopy.playbill
         case .continueWatching: return KinemaCopy.continue
         case .stream: return KinemaCopy.openStreamTitle
         case .preferences: return KinemaCopy.preferences

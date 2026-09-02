@@ -129,6 +129,7 @@ public final class PlayerSession: PlaybackEngine {
     private var lastTrackRefresh = Date.distantPast
     private var lastChapterRefresh = Date.distantPast
     private var lastProgressSave = Date.distantPast
+    private var didRequestPlaybillPreparation = false
     /// After "Not now", don't re-offer Up Next for this media until a new title loads.
     private var upNextSuppressedForMediaID: String?
     private var securityScopedURLs: [URL] = []
@@ -181,6 +182,7 @@ public final class PlayerSession: PlaybackEngine {
         endSecurityScopedAccess()
         pendingStartPosition = nil
         currentItem = nil
+        didRequestPlaybillPreparation = false
         tracks = []
         chapters = []
         setUpNextOffer(nil)
@@ -279,6 +281,7 @@ public final class PlayerSession: PlaybackEngine {
 
         // Mount the player view before starting playback on iOS.
         currentItem = resolvedItem
+        didRequestPlaybillPreparation = false
         PlaybillScrobbler.resetSession(for: resolvedItem.url)
         tracks = []
         chapters = []
@@ -619,6 +622,7 @@ public final class PlayerSession: PlaybackEngine {
         controller.stop()
         state = .idle
         currentItem = nil
+        didRequestPlaybillPreparation = false
         EventBus.shared.emit(.stateChanged(state))
     }
 
@@ -2103,6 +2107,7 @@ public final class PlayerSession: PlaybackEngine {
                 state = updated.isPaused ? .paused : .playing
             }
             maybeSaveWatchProgress()
+            maybePreparePlaybillPlayback()
             EventBus.shared.emit(.playbackInfoUpdated(info))
         }
 
@@ -2129,13 +2134,31 @@ public final class PlayerSession: PlaybackEngine {
             duration: info.duration,
             notify: false
         )
-        if info.duration > 0, !shouldDeferPassivePlaybillScrobble() {
-            let progress = info.position / info.duration
-            if progress >= PlaybillPreferencesStore.completionThreshold - 0.02 {
-                Task {
+        if !shouldDeferPassivePlaybillScrobble() {
+            Task {
+                if info.duration > 0,
+                   info.position / info.duration >= PlaybillPreferencesStore.completionThreshold - 0.02 {
                     await PlaybillScrobbler.evaluate(item: item, position: info.position, duration: info.duration)
                 }
             }
+        }
+    }
+
+    private func maybePreparePlaybillPlayback() {
+        guard !didRequestPlaybillPreparation,
+              let item = currentItem,
+              state.isActive,
+              info.position > 5,
+              !shouldDeferPassivePlaybillScrobble() else { return }
+        didRequestPlaybillPreparation = true
+        let position = info.position
+        let duration = info.duration
+        Task {
+            await PlaybillScrobbler.preparePlayback(
+                item: item,
+                position: position,
+                duration: duration
+            )
         }
     }
 

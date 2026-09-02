@@ -61,24 +61,46 @@ public enum PlaybillLibraryResolver {
 
     /// Links local library files to episode catalog entries for a tracked show.
     public static func indexLibraryMedia(forShowTargetID showTargetID: String) {
-        guard let show = PlaybillStore.entry(for: showTargetID), show.kind == .tvShow else { return }
+        indexLibraryMedia(forShowTargetIDs: [showTargetID])
+    }
 
-        let showKey = MediaSeriesOrganizer.showKey(forTitle: show.title)
+    /// Index multiple shows in one library walk. Timeline used to check links only,
+    /// so matching files that had never been played remained invisible to Up Next.
+    public static func indexLibraryMedia(forShowTargetIDs showTargetIDs: [String]) {
+        let shows = showTargetIDs.compactMap { targetID -> CatalogEntry? in
+            guard let show = PlaybillStore.entry(for: targetID), show.kind == .tvShow else { return nil }
+            return show
+        }
+        guard !shows.isEmpty else { return }
+
+        let showsByExactKey = Dictionary(grouping: shows) {
+            MediaSeriesOrganizer.showKey(forTitle: $0.title)
+        }
         LibraryRootStore.shared.prepareLibraryServices()
 
         var pendingLinks: [(mediaID: String, targetID: String)] = []
         var pendingMemories: [(showKey: String, tmdbShowID: Int)] = []
+        var seenURLs = Set<String>()
 
         for root in LibraryRootStore.shared.roots {
             guard let rootURL = LibraryRootStore.shared.resolveURL(for: root) else { continue }
             for url in WatchProgressStore.mediaURLs(under: rootURL) {
+                guard seenURLs.insert(url.standardizedFileURL.path).inserted else { continue }
                 guard let episode = MediaSeriesOrganizer.episodeIdentity(from: url) else { continue }
-                guard MediaSeriesOrganizer.showTitleMatches(episode.showTitle, catalogTitle: show.title) else {
-                    continue
-                }
-
                 let filenameShowKey = MediaSeriesOrganizer.showKey(forTitle: episode.showTitle)
-                if filenameShowKey != showKey {
+                let matchingShow: CatalogEntry?
+                if let exact = showsByExactKey[filenameShowKey], exact.count == 1 {
+                    matchingShow = exact[0]
+                } else {
+                    let fuzzy = shows.filter {
+                        MediaSeriesOrganizer.showTitleMatches(episode.showTitle, catalogTitle: $0.title)
+                    }
+                    matchingShow = fuzzy.count == 1 ? fuzzy[0] : nil
+                }
+                guard let show = matchingShow else { continue }
+
+                let catalogShowKey = MediaSeriesOrganizer.showKey(forTitle: show.title)
+                if filenameShowKey != catalogShowKey {
                     pendingMemories.append((filenameShowKey, show.tmdbID))
                 }
 
@@ -93,8 +115,10 @@ public enum PlaybillLibraryResolver {
             }
         }
 
-        for memory in pendingMemories {
-            PlaybillStore.rememberShow(showKey: memory.showKey, tmdbShowID: memory.tmdbShowID)
+        for memoryKey in Set(pendingMemories.map { "\($0.showKey)|\($0.tmdbShowID)" }) {
+            let parts = memoryKey.split(separator: "|", maxSplits: 1)
+            guard parts.count == 2, let tmdbShowID = Int(parts[1]) else { continue }
+            PlaybillStore.rememberShow(showKey: String(parts[0]), tmdbShowID: tmdbShowID)
         }
         if !pendingLinks.isEmpty {
             PlaybillStore.linkMediaBatch(

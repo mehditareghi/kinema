@@ -23,7 +23,23 @@ struct PlaybillProgrammeTimeline: View {
     }
 
     private var upcoming: [PlaybillShowFeed] {
-        feeds.filter { $0.nextEpisode != nil }
+        feeds.enumerated()
+            .filter { $0.element.nextEpisode != nil }
+            .sorted { lhs, rhs in
+                let leftDate = lhs.element.recentWatched.map(\.watchedAt).max()
+                let rightDate = rhs.element.recentWatched.map(\.watchedAt).max()
+                switch (leftDate, rightDate) {
+                case let (left?, right?) where left != right:
+                    return left > right
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                default:
+                    return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
     }
 
     private var hasUnavailableProgramme: Bool {
@@ -32,42 +48,34 @@ struct PlaybillProgrammeTimeline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                KinemaSectionTitle("Your programme", systemImage: "play.square.stack")
-                Spacer()
-                Text("\(upcoming.count) up next")
-                    .font(KinemaType.metadataStrong)
-                    .foregroundStyle(KinemaTheme.brass)
-            }
-
-            Text("Scroll up for what you watched. Your next episodes are waiting below the playhead.")
-                .font(KinemaType.metadata)
-                .foregroundStyle(KinemaTheme.secondaryText)
-
             VStack(spacing: 0) {
-                ForEach(watched) { item in
-                    watchedRow(item)
-                }
-
-                playhead
-                    .id(Self.nowAnchor)
-
-                ForEach(upcoming) { feed in
-                    if let episode = feed.nextEpisode {
-                        upcomingRow(feed: feed, episode: episode)
+                LazyVStack(spacing: 0) {
+                    ForEach(watched) { item in
+                        watchedRow(item)
                     }
-                }
 
-                if upcoming.isEmpty {
-                    Label(
-                        hasUnavailableProgramme ? "Up Next is unavailable until saved episode data can refresh." : "You’re all caught up.",
-                        systemImage: hasUnavailableProgramme ? "wifi.slash" : "checkmark.circle"
-                    )
-                    .font(KinemaType.label)
-                    .foregroundStyle(KinemaTheme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 58)
-                    .padding(.vertical, 22)
+                    programmeHeader
+                        .id(Self.nowAnchor)
+
+                    playhead
+
+                    ForEach(upcoming) { feed in
+                        if let episode = feed.nextEpisode {
+                            upcomingRow(feed: feed, episode: episode)
+                        }
+                    }
+
+                    if upcoming.isEmpty {
+                        Label(
+                            hasUnavailableProgramme ? "Up Next is unavailable until saved episode data can refresh." : "You’re all caught up.",
+                            systemImage: hasUnavailableProgramme ? "wifi.slash" : "checkmark.circle"
+                        )
+                        .font(KinemaType.label)
+                        .foregroundStyle(KinemaTheme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 58)
+                        .padding(.vertical, 22)
+                    }
                 }
             }
             .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -84,6 +92,24 @@ struct PlaybillProgrammeTimeline: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    private var programmeHeader: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                KinemaSectionTitle("Up Next", systemImage: "play.square.stack")
+                Spacer()
+                Text("\(upcoming.count) up next")
+                    .font(KinemaType.metadataStrong)
+                    .foregroundStyle(KinemaTheme.brass)
+            }
+            Text("Scroll up for what you watched. Your next episodes are waiting below the playhead.")
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
     }
 
     private func watchedRow(_ item: PlaybillTimelineRow) -> some View {
@@ -145,8 +171,10 @@ struct PlaybillProgrammeTimeline: View {
     }
 
     private func upcomingRow(feed: PlaybillShowFeed, episode: CatalogEntry) -> some View {
-        HStack(spacing: 14) {
-            timelineDot(systemName: "play.fill", active: true)
+        let availability = PlaybillShowProgress.episodeAvailability(for: episode, in: feed.show.id)
+        let canMark = availability.canMarkWatched
+        return HStack(spacing: 14) {
+            timelineDot(systemName: canMark ? "play.fill" : "calendar", active: true)
 
             NavigationLink(value: PlaybillRoute.show(feed.show)) {
                 HStack(spacing: 14) {
@@ -166,6 +194,14 @@ struct PlaybillProgrammeTimeline: View {
                             Text("\(feed.missedCount) episodes waiting")
                                 .font(KinemaType.microStrong)
                                 .foregroundStyle(KinemaTheme.brass)
+                        } else if case .upcoming(let date) = availability {
+                            Text("Airs \(date.formatted(date: .abbreviated, time: .omitted))")
+                                .font(KinemaType.microStrong)
+                                .foregroundStyle(KinemaTheme.brass)
+                        } else if availability == .unscheduled {
+                            Text("Announced · air date TBA")
+                                .font(KinemaType.microStrong)
+                                .foregroundStyle(KinemaTheme.secondaryText)
                         }
                     }
                 }
@@ -186,9 +222,10 @@ struct PlaybillProgrammeTimeline: View {
             }
 
             PlaybillTimelineIconButton(
-                systemName: "checkmark",
+                systemName: canMark ? "checkmark" : "calendar.badge.clock",
                 tint: KinemaTheme.brass,
-                accessibilityLabel: KinemaCopy.playbillStampWatched
+                accessibilityLabel: canMark ? KinemaCopy.playbillStampWatched : "Episode has not aired yet",
+                isDisabled: !canMark
             ) {
                 markWatched(episode, in: feed.show)
             }
@@ -220,18 +257,19 @@ struct PlaybillProgrammeTimeline: View {
 
     private func markWatched(_ episode: CatalogEntry, in show: CatalogEntry) {
         guard let season = episode.seasonNumber, let number = episode.episodeNumber else { return }
+        guard PlaybillShowProgress.episodeAvailability(for: episode, in: show.id).canMarkWatched else { return }
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         #endif
         _ = PlaybillStore.upsertCatalog(episode)
         Task {
-            PlaybillShowProgress.markEpisodeWatched(
+            _ = PlaybillShowProgress.markEpisodeWatched(
                 showTargetID: show.id,
                 season: season,
                 episode: number,
                 includePriorUnwatched: false
             )
-            _ = await PlaybillShowProgress.reconcileTrackingState(for: show.id)
+            _ = await PlaybillShowProgress.reconcileTrackingState(for: show.id, allowNetwork: true)
         }
     }
 }
@@ -404,6 +442,8 @@ struct PlaybillShowFeedCard: View {
 
     private func activeEpisodeRow(_ episode: CatalogEntry) -> some View {
         let hasLocal = PlaybillLibraryResolver.hasLinkedMedia(for: episode.id)
+        let availability = PlaybillShowProgress.episodeAvailability(for: episode, in: feed.show.id)
+        let canMark = availability.canMarkWatched
 
         return HStack(alignment: .center, spacing: 12) {
             PlaybillPosterThumb(path: episode.posterPath, kind: .episode)
@@ -428,6 +468,15 @@ struct PlaybillShowFeedCard: View {
                         .foregroundStyle(KinemaTheme.secondaryText)
                         .lineLimit(1)
                 }
+                if case .upcoming(let date) = availability {
+                    Text("Airs \(date.formatted(date: .abbreviated, time: .omitted))")
+                        .font(KinemaType.microStrong)
+                        .foregroundStyle(KinemaTheme.brass)
+                } else if availability == .unscheduled {
+                    Text("Announced · air date TBA")
+                        .font(KinemaType.microStrong)
+                        .foregroundStyle(KinemaTheme.secondaryText)
+                }
             }
 
             Spacer(minLength: 0)
@@ -444,9 +493,10 @@ struct PlaybillShowFeedCard: View {
                 }
 
                 PlaybillTimelineIconButton(
-                    systemName: "checkmark",
+                    systemName: canMark ? "checkmark" : "calendar.badge.clock",
                     tint: KinemaTheme.brass,
-                    accessibilityLabel: KinemaCopy.playbillStampWatched
+                    accessibilityLabel: canMark ? KinemaCopy.playbillStampWatched : "Episode has not aired yet",
+                    isDisabled: !canMark
                 ) {
                     requestStamp(episode)
                 }
@@ -460,6 +510,7 @@ struct PlaybillShowFeedCard: View {
                 Label(KinemaCopy.playbillStampWatched, systemImage: "checkmark")
             }
             .tint(KinemaTheme.brass)
+            .disabled(!canMark)
         }
         #endif
     }
@@ -477,6 +528,7 @@ struct PlaybillShowFeedCard: View {
     private func requestStamp(_ episode: CatalogEntry) {
         guard let season = episode.seasonNumber,
               let episodeNumber = episode.episodeNumber else { return }
+        guard PlaybillShowProgress.episodeAvailability(for: episode, in: feed.show.id).canMarkWatched else { return }
 
         let prior = PlaybillShowProgress.priorUnwatchedEpisodes(
             for: feed.show.id,
@@ -493,6 +545,7 @@ struct PlaybillShowFeedCard: View {
     private func commitStamp(_ episode: CatalogEntry, includePrior: Bool, priorCount: Int) {
         guard let season = episode.seasonNumber,
               let episodeNumber = episode.episodeNumber else { return }
+        guard PlaybillShowProgress.episodeAvailability(for: episode, in: feed.show.id).canMarkWatched else { return }
 
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -530,7 +583,7 @@ struct PlaybillShowFeedCard: View {
         }
 
         Task(priority: .utility) {
-            PlaybillShowProgress.markEpisodeWatched(
+            _ = PlaybillShowProgress.markEpisodeWatched(
                 showTargetID: feed.show.id,
                 season: season,
                 episode: episodeNumber,

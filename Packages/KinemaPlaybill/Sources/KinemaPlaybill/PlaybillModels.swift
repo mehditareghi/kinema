@@ -18,6 +18,20 @@ public enum WatchCompletion: String, Codable, Sendable {
     case partial
 }
 
+public enum PlaybillEpisodeAvailability: Sendable, Equatable {
+    case released
+    case upcoming(Date)
+    case unscheduled
+    case unknown
+
+    public var canMarkWatched: Bool {
+        switch self {
+        case .released, .unknown: true
+        case .upcoming, .unscheduled: false
+        }
+    }
+}
+
 public enum MatchConfidence: String, Codable, Sendable, Equatable {
     case high
     case medium
@@ -39,6 +53,9 @@ public struct CatalogEntry: Codable, Identifiable, Sendable, Equatable, Hashable
     public var runtimeMinutes: Int?
     public var seasonNumber: Int?
     public var episodeNumber: Int?
+    /// The episode's TMDB air date. Kept separately from `year` so future
+    /// episodes can be shown without being treated as watchable releases.
+    public var episodeAirDate: Date? = nil
     public var cachedAt: Date
     /// TMDB lifecycle metadata for deriving series state without asking the viewer.
     public var seriesStatus: String? = nil
@@ -47,6 +64,10 @@ public struct CatalogEntry: Codable, Identifiable, Sendable, Equatable, Hashable
     public var totalEpisodeCount: Int? = nil
     public var lastAiredSeasonNumber: Int? = nil
     public var lastAiredEpisodeNumber: Int? = nil
+    /// The most recent episode air date reported by TMDB. This lets lifecycle
+    /// repair distinguish an actively returning show from a years-old stale
+    /// "Returning Series" flag.
+    public var lastEpisodeAirDate: Date? = nil
 
     public init(
         id: String,
@@ -63,13 +84,15 @@ public struct CatalogEntry: Codable, Identifiable, Sendable, Equatable, Hashable
         runtimeMinutes: Int? = nil,
         seasonNumber: Int? = nil,
         episodeNumber: Int? = nil,
+        episodeAirDate: Date? = nil,
         cachedAt: Date = Date(),
         seriesStatus: String? = nil,
         seriesInProduction: Bool? = nil,
         nextEpisodeAirDate: Date? = nil,
         totalEpisodeCount: Int? = nil,
         lastAiredSeasonNumber: Int? = nil,
-        lastAiredEpisodeNumber: Int? = nil
+        lastAiredEpisodeNumber: Int? = nil,
+        lastEpisodeAirDate: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -85,6 +108,7 @@ public struct CatalogEntry: Codable, Identifiable, Sendable, Equatable, Hashable
         self.runtimeMinutes = runtimeMinutes
         self.seasonNumber = seasonNumber
         self.episodeNumber = episodeNumber
+        self.episodeAirDate = episodeAirDate
         self.cachedAt = cachedAt
         self.seriesStatus = seriesStatus
         self.seriesInProduction = seriesInProduction
@@ -92,6 +116,7 @@ public struct CatalogEntry: Codable, Identifiable, Sendable, Equatable, Hashable
         self.totalEpisodeCount = totalEpisodeCount
         self.lastAiredSeasonNumber = lastAiredSeasonNumber
         self.lastAiredEpisodeNumber = lastAiredEpisodeNumber
+        self.lastEpisodeAirDate = lastEpisodeAirDate
     }
 
     public var displayTitle: String {
@@ -148,6 +173,23 @@ public struct WatchActivity: Codable, Identifiable, Sendable, Equatable {
     }
 }
 
+public struct PlaybillWatchRemovalSnapshot: Sendable, Equatable {
+    public var activities: [WatchActivity]
+    public var playbackProgress: [String: TitlePlaybackProgress]
+
+    public init(
+        activities: [WatchActivity],
+        playbackProgress: [String: TitlePlaybackProgress] = [:]
+    ) {
+        self.activities = activities
+        self.playbackProgress = playbackProgress
+    }
+
+    public var isEmpty: Bool {
+        activities.isEmpty && playbackProgress.isEmpty
+    }
+}
+
 public struct MediaLink: Codable, Identifiable, Sendable, Equatable {
     public var id: UUID
     public var mediaID: String
@@ -181,7 +223,7 @@ public struct ShowMatchMemory: Codable, Sendable, Equatable {
 }
 
 public struct PlaybillDatabase: Codable, Sendable {
-    public static let currentVersion = 5
+    public static let currentVersion = 8
 
     public var version: Int
     public var catalog: [String: CatalogEntry]
@@ -344,8 +386,10 @@ public struct PlaybillShowMetadataSnapshot: Codable, Sendable, Equatable {
 
     public var hasCompleteEpisodeMap: Bool {
         let regularSeasons = seasons.filter { $0.seasonNumber > 0 }
-        return !regularSeasons.isEmpty && regularSeasons
-            .allSatisfy { $0.episodeCount == 0 || $0.episodes.count >= $0.episodeCount }
+        guard !regularSeasons.isEmpty else { return false }
+        return regularSeasons.allSatisfy { season in
+            season.episodeCount > 0 && season.episodes.count >= season.episodeCount
+        }
     }
 }
 
@@ -463,10 +507,43 @@ public struct PlaybillSearchResult: Identifiable, Sendable, Hashable {
     public var posterPath: String?
 }
 
+public enum PlaybillTitleState: Sendable, Hashable {
+    case new
+    case tracked(TrackedShowStatus)
+    case watched(count: Int)
+    case watchLater
+
+    public var isExisting: Bool {
+        switch self {
+        case .new: return false
+        case .tracked, .watched, .watchLater: return true
+        }
+    }
+}
+
+public struct TraktImportSummary: Sendable, Equatable {
+    public var added: Int
+    public var alreadyPresent: Int
+    public var repaired: Int
+
+    public init(added: Int = 0, alreadyPresent: Int = 0, repaired: Int = 0) {
+        self.added = added
+        self.alreadyPresent = alreadyPresent
+        self.repaired = repaired
+    }
+
+    public var handled: Int { added + alreadyPresent }
+}
+
 public struct PlaybillMatchCandidate: Identifiable, Sendable {
     public var id: String { result.id }
     public let result: PlaybillSearchResult
     public let confidence: MatchConfidence
+}
+
+public enum PlaybillMatchPromptPurpose: Sendable, Equatable {
+    case identifyPlayback
+    case logCompletedWatch
 }
 
 public struct PlaybillMatchPrompt: Identifiable, Sendable {
@@ -479,6 +556,7 @@ public struct PlaybillMatchPrompt: Identifiable, Sendable {
     public let watchedAt: Date
     public let pendingResolutionID: UUID?
     public let source: WatchSource
+    public let purpose: PlaybillMatchPromptPurpose
 
     public init(
         id: UUID = UUID(),
@@ -489,7 +567,8 @@ public struct PlaybillMatchPrompt: Identifiable, Sendable {
         sessionKey: String,
         watchedAt: Date = Date(),
         pendingResolutionID: UUID? = nil,
-        source: WatchSource = .player
+        source: WatchSource = .player,
+        purpose: PlaybillMatchPromptPurpose = .logCompletedWatch
     ) {
         self.id = id
         self.mediaURL = mediaURL
@@ -500,6 +579,7 @@ public struct PlaybillMatchPrompt: Identifiable, Sendable {
         self.watchedAt = watchedAt
         self.pendingResolutionID = pendingResolutionID
         self.source = source
+        self.purpose = purpose
     }
 }
 

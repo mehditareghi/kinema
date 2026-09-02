@@ -447,7 +447,10 @@ public enum MediaSeriesOrganizer {
     }
 
     private static func normalizeKey(_ value: String) -> String {
-        value.lowercased().filter { $0.isLetter || $0.isNumber }
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
     }
 
     private static func stripFillerWords(fromKey key: String) -> String {

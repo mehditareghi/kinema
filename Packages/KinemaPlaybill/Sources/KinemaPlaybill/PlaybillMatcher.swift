@@ -145,6 +145,9 @@ public enum PlaybillMatcher {
                     confidence: best.confidence,
                     confirmedByUser: best.confidence == .manual
                 )
+                if entry.kind == .episode, let showKey = showKeyFromURL(url) {
+                    PlaybillStore.rememberShow(showKey: showKey, tmdbShowID: entry.tmdbID)
+                }
                 return .autoLogged(targetID: entry.id)
             }
             return .autoLogged(targetID: best.result.id)
@@ -241,7 +244,7 @@ public enum PlaybillMatcher {
 
         do {
             if let showMatch = try await TMDBClient.searchBestMatch(
-                title: episode.showTitle,
+                title: cleanedLookupTitle(episode.showTitle),
                 kind: .tvShow
             ) {
                 let entry = try await TMDBClient.fetchEpisode(
@@ -250,7 +253,10 @@ public enum PlaybillMatcher {
                     episode: episode.episode
                 )
                 _ = PlaybillStore.upsertCatalog(entry)
-                return [PlaybillMatchCandidate(result: searchResult(from: entry), confidence: .medium)]
+                let confidence: MatchConfidence = normalized(cleanedLookupTitle(episode.showTitle)) == normalized(showMatch.title)
+                    ? .high
+                    : .medium
+                return [PlaybillMatchCandidate(result: searchResult(from: entry), confidence: confidence)]
             }
         } catch {
             return []
@@ -261,9 +267,13 @@ public enum PlaybillMatcher {
 
     private static func movieCandidates(title: String) async -> [PlaybillMatchCandidate] {
         do {
-            let results = try await TMDBClient.search(query: title)
+            let lookupTitle = cleanedLookupTitle(title)
+            let results = try await TMDBClient.search(query: lookupTitle).filter { $0.kind == .movie }
             return results.prefix(5).map { result in
-                PlaybillMatchCandidate(result: result, confidence: normalized(title) == normalized(result.title) ? .high : .medium)
+                PlaybillMatchCandidate(
+                    result: result,
+                    confidence: normalized(lookupTitle) == normalized(result.title) ? .high : .medium
+                )
             }
         } catch {
             return []
@@ -285,10 +295,40 @@ public enum PlaybillMatcher {
 
     private static func cleanedTitle(from title: String, url: URL) -> String {
         let raw = title.isEmpty ? url.deletingPathExtension().lastPathComponent : title
-        return raw
+        return cleanedLookupTitle(raw)
+    }
+
+    /// Remove common release metadata without guessing through the meaningful part
+    /// of a title. This turns `Film.2025.2160p.WEB-DL` into `Film`, while keeping a
+    /// genuine trailing-number title such as `Blade Runner 2049` intact.
+    private static func cleanedLookupTitle(_ raw: String) -> String {
+        let separated = raw
             .replacingOccurrences(of: ".", with: " ")
             .replacingOccurrences(of: "_", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: " ")
+        let tokens = separated.split { $0.isWhitespace }.map(String.init)
+        guard !tokens.isEmpty else { return raw.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        let noise = Set([
+            "480p", "576p", "720p", "1080p", "1080i", "2160p", "4320p",
+            "web", "webdl", "webrip", "bluray", "brrip", "bdrip", "hdrip", "dvdrip",
+            "hdtv", "remux", "x264", "x265", "h264", "h265", "hevc", "av1",
+            "hdr", "hdr10", "dolby", "vision", "dovi", "aac", "ac3", "dts", "atmos"
+        ])
+        var end = tokens.count
+        for (index, token) in tokens.enumerated() {
+            let normalizedToken = normalized(token)
+            let isNoise = noise.contains(normalizedToken)
+            let isReleaseYear = token.count == 4
+                && Int(token).map { (1900...2099).contains($0) } == true
+                && tokens[(index + 1)...].contains { noise.contains(normalized($0)) }
+            if isNoise || isReleaseYear {
+                end = index
+                break
+            }
+        }
+        let cleaned = tokens[..<end].joined(separator: " ")
+        return cleaned.isEmpty ? tokens.joined(separator: " ") : cleaned
     }
 
     private static func normalized(_ value: String) -> String {

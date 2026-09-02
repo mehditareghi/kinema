@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import KinemaCore
+import KinemaPlaybill
 import KinemaUI
 import KinemaPlayback
 import KinemaPlugins
@@ -26,6 +27,8 @@ struct KinemaApp: App {
                     _ = SubtitleFontRegistry.prepare()
                     // Defer library I/O and Wi‑Fi so the first frame can paint.
                     Task { @MainActor in
+                        _ = PlaybillStore.repairWatchedSeriesTracking()
+                        _ = PlaybillStore.demoteIncompleteCompletedShows(notify: false)
                         LibraryRootStore.shared.prepareLibraryServices()
                         syncWiFiSharing()
                     }

@@ -52,6 +52,11 @@ public struct LibraryShellView: View {
         .font(KinemaType.body)
         .onAppear {
             viewModel.session.historyContext = modelContext
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-KinemaUITestMyReel") {
+                viewModel.librarySection = .playbill
+            }
+            #endif
         }
         #if os(iOS) || os(macOS)
         .fileImporter(

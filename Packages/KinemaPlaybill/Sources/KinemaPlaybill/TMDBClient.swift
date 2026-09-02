@@ -161,12 +161,32 @@ public enum TMDBClient {
         }
         guard !filtered.isEmpty else { return nil }
 
+        let normalizedTitle = normalizedSearchTitle(title)
         if let year {
+            if let exact = filtered.first(where: {
+                normalizedSearchTitle($0.title) == normalizedTitle && $0.year == year
+            }) {
+                return exact
+            }
+            if let exact = filtered.first(where: { normalizedSearchTitle($0.title) == normalizedTitle }) {
+                return exact
+            }
             if let exact = filtered.first(where: { $0.year == year }) {
                 return exact
             }
         }
+        if let exact = filtered.first(where: { normalizedSearchTitle($0.title) == normalizedTitle }) {
+            return exact
+        }
         return filtered.first
+    }
+
+    private static func normalizedSearchTitle(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .joined()
     }
 
     private static func request(path: String, queryItems: [URLQueryItem] = []) async throws -> [String: Any] {
@@ -268,7 +288,10 @@ public enum TMDBClient {
             nextEpisodeAirDate: dateFromString(nextEpisode?["air_date"] as? String),
             totalEpisodeCount: json["number_of_episodes"] as? Int,
             lastAiredSeasonNumber: lastEpisode?["season_number"] as? Int,
-            lastAiredEpisodeNumber: lastEpisode?["episode_number"] as? Int
+            lastAiredEpisodeNumber: lastEpisode?["episode_number"] as? Int,
+            lastEpisodeAirDate: dateFromString(
+                (lastEpisode?["air_date"] as? String) ?? (json["last_air_date"] as? String)
+            )
         )
     }
 
@@ -294,6 +317,7 @@ public enum TMDBClient {
             runtimeMinutes: json["runtime"] as? Int,
             seasonNumber: season,
             episodeNumber: episode,
+            episodeAirDate: dateFromString(json["air_date"] as? String),
             cachedAt: Date()
         )
     }

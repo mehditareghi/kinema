@@ -27,17 +27,17 @@ enum PlaybillSection: String, CaseIterable, Identifiable {
         case .diary: return "My Playbill"
         case .lists: return KinemaCopy.playbillLists
         case .search: return KinemaCopy.playbillSearch
-        case .stats: return KinemaCopy.playbillStats
+        case .stats: return "My Reel"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .timeline: return "Your next episode, with everything you watched behind it."
+        case .timeline: return "What comes next, with your viewing history just behind the playhead."
         case .diary: return "Everything you follow, grouped by where it stands—not by individual episode."
         case .lists: return "Watchlists and collections, made for choosing what comes next."
         case .search: return "Find a film or series and bring it into your Playbill."
-        case .stats: return "Patterns, milestones, and the shape of your watching."
+        case .stats: return "The story your viewing leaves behind."
         }
     }
 
@@ -47,7 +47,7 @@ enum PlaybillSection: String, CaseIterable, Identifiable {
         case .diary: return "rectangle.stack.fill"
         case .lists: return "list.bullet.rectangle"
         case .search: return "magnifyingglass"
-        case .stats: return "chart.bar.fill"
+        case .stats: return "film.fill"
         }
     }
 }
@@ -124,13 +124,21 @@ public struct PlaybillView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-KinemaUITestMyReel") {
+                section = .stats
+            }
+            #endif
             refreshConfigured()
             refreshOfflineStatus()
             statusToken = EventBus.shared.subscribe { event in
                 if case .playbillUpdated = event { refreshOfflineStatus() }
             }
             if connectivity.isOnline {
-                Task { await PendingWatchResolver.retryAll() }
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    await PendingWatchResolver.retryAll()
+                }
             }
         }
         .onDisappear {
@@ -335,6 +343,7 @@ struct PlaybillTimelineTab: View {
     @State private var playbillToken: UUID?
     @State private var feedSyncTask: Task<Void, Never>?
     @State private var auxSyncTask: Task<Void, Never>?
+    @State private var didSetInitialPosition = false
 
     private var accent: Color { KinemaTheme.accent }
     private var isEmpty: Bool {
@@ -368,10 +377,11 @@ struct PlaybillTimelineTab: View {
                 .padding(.bottom, 44)
             }
             .scrollContentBackground(.hidden)
-            .onChange(of: showFeeds.map(\.id)) { oldValue, newValue in
-                guard oldValue.isEmpty, !newValue.isEmpty else { return }
+            .onChange(of: isLoading) { wasLoading, loading in
+                guard wasLoading, !loading, !didSetInitialPosition else { return }
+                didSetInitialPosition = true
                 DispatchQueue.main.async {
-                    proxy.scrollTo(PlaybillProgrammeTimeline.nowAnchor, anchor: .center)
+                    proxy.scrollTo(PlaybillProgrammeTimeline.nowAnchor, anchor: .top)
                 }
             }
         }
@@ -475,41 +485,29 @@ struct PlaybillTimelineTab: View {
     }
 
     private func loadInitialFeeds() async {
-        // Paint immediately from memory — never block open on TMDB or library walks.
-        showFeeds = PlaybillShowFeedBuilder.buildLightweight()
-        auxSections = PlaybillTimelineBuilder.buildContinueAndHistory()
+        // Paint Playbill chrome first — never do store/TMDB work before the first frame.
+        isLoading = true
+        await Task.yield()
+
+        let feeds = PlaybillShowFeedBuilder.buildLightweight()
+        let aux = PlaybillTimelineBuilder.buildContinueAndHistory(limitHistory: 40)
+        showFeeds = feeds
+        auxSections = aux
         isLoading = false
 
-        await enrichFeedsInBackground()
-    }
-
-    private func enrichFeedsInBackground() async {
-        let trackedIDs = PlaybillStore.trackedShows()
-            .filter { $0.status == .watching || $0.status == .planToWatch }
-            .map(\.targetID)
-
-        for showID in trackedIDs {
-            guard !Task.isCancelled else { return }
-            if !PlaybillShowProgress.hasWarmCache(for: showID) {
-                await PlaybillShowProgress.warmCache(for: showID)
-            }
-            _ = await PlaybillShowProgress.reconcileTrackingState(for: showID)
-            guard let status = PlaybillStore.trackedShow(for: showID)?.status,
-                  status == .watching || status == .planToWatch else {
-                showFeeds.removeAll { $0.id == showID }
-                continue
-            }
-            if let refreshed = PlaybillShowFeedBuilder.syncFeed(for: showID),
-               let index = showFeeds.firstIndex(where: { $0.id == refreshed.id }) {
-                showFeeds[index] = refreshed
-            }
-        }
-
-        // Library reindex is expensive — run once after UI is up, never on the open path.
-        try? await Task.sleep(nanoseconds: 400_000_000)
-        guard !Task.isCancelled else { return }
-        await PlaybillStore.reindexTrackedShowsLibraryMediaAsync()
+        // Discover all matching episode files in one library walk. This makes the
+        // Up Next play action deterministic even when a file has never been opened.
+        await Task.yield()
+        PlaybillLibraryResolver.indexLibraryMedia(
+            forShowTargetIDs: feeds.map { $0.show.id }
+        )
         showFeeds = PlaybillShowFeedBuilder.buildLightweight()
+
+        // Single local write for false Completed — no per-show reconcile / TMDB.
+        await Task.yield()
+        if PlaybillStore.demoteIncompleteCompletedShows(notify: false) > 0 {
+            showFeeds = PlaybillShowFeedBuilder.buildLightweight()
+        }
     }
 
     private func reloadFeeds(reindexLibrary: Bool = false) {
@@ -523,9 +521,10 @@ struct PlaybillTimelineTab: View {
                     auxSections = auxiliary
                     isLoading = false
                 }
-                PlaybillStore.reindexTrackedShowsLibraryMedia()
+                await PlaybillStore.reindexTrackedShowsLibraryMediaAsync()
             }
-            let feeds = await PlaybillShowFeedBuilder.build(reindexLibrary: false)
+            // Never call build() here — that warms TMDB for every show and freezes the UI.
+            let feeds = PlaybillShowFeedBuilder.buildLightweight()
             let auxiliary = PlaybillTimelineBuilder.buildContinueAndHistory()
             await MainActor.run {
                 showFeeds = feeds
@@ -1079,6 +1078,57 @@ private struct PlaybillListTitleRow: View {
 
 // MARK: - My Playbill
 
+private func playbillWatchedEpisodesByShow(
+    db: PlaybillDatabase,
+    trackedShows: [TrackedShow],
+    fullActivities: [WatchActivity]
+) -> [String: [WatchActivity]] {
+    let shows = trackedShows.compactMap { tracked -> CatalogEntry? in
+        guard let show = db.catalog[tracked.targetID], show.kind == .tvShow else { return nil }
+        return show
+    }
+    guard !shows.isEmpty else { return [:] }
+
+    var showIDsByTMDBID: [Int: Set<String>] = [:]
+    var showIDsByTitleKey: [String: Set<String>] = [:]
+    for show in shows {
+        showIDsByTMDBID[show.tmdbID, default: []].insert(show.id)
+        let key = MediaSeriesOrganizer.showKey(forTitle: show.title)
+        showIDsByTitleKey[key, default: []].insert(show.id)
+    }
+
+    var titleMatchCache: [String: Set<String>] = [:]
+    func titleMatchedShowIDs(for episode: CatalogEntry) -> Set<String> {
+        let episodeTitleKey = MediaSeriesOrganizer.showKey(forTitle: episode.title)
+        if let cached = titleMatchCache[episodeTitleKey] { return cached }
+        let matches = showIDsByTitleKey[episodeTitleKey] ?? []
+        titleMatchCache[episodeTitleKey] = matches
+        return matches
+    }
+
+    var grouped: [String: [WatchActivity]] = [:]
+    for activity in fullActivities {
+        guard let episode = db.catalog[activity.targetID], episode.kind == .episode else { continue }
+        var showIDs = Set<String>()
+        if let parentShowID = episode.parentShowID,
+           db.catalog[parentShowID]?.kind == .tvShow {
+            showIDs.insert(parentShowID)
+        }
+        for showID in showIDsByTMDBID[episode.tmdbID, default: []] {
+            showIDs.insert(showID)
+        }
+        if showIDs.isEmpty, episode.parentShowID == nil, episode.tmdbID <= 0 {
+            for showID in titleMatchedShowIDs(for: episode) {
+                showIDs.insert(showID)
+            }
+        }
+        for showID in showIDs {
+            grouped[showID, default: []].append(activity)
+        }
+    }
+    return grouped
+}
+
 struct PlaybillMyPlaybillProfileSection: View {
     @Bindable var viewModel: PlayerViewModel
     @State private var shelves: [MyPlaybillShelf] = []
@@ -1119,7 +1169,10 @@ struct PlaybillMyPlaybillProfileSection: View {
         .onDisappear {
             if let playbillToken { EventBus.shared.unsubscribe(playbillToken) }
         }
-        .task { await refreshDerivedStates() }
+        .task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await refreshDerivedStates()
+        }
     }
 
     private var visibleShelves: [MyPlaybillShelf] {
@@ -1266,6 +1319,9 @@ struct PlaybillMyPlaybillProfileSection: View {
                             .font(KinemaType.labelStrong)
                             .foregroundStyle(KinemaTheme.paper)
                             .lineLimit(1)
+                        if item.repeatCount > 1 {
+                            PlaybillRepeatBadge(count: item.repeatCount, scale: .chip)
+                        }
                         Spacer(minLength: 4)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
@@ -1335,17 +1391,37 @@ struct PlaybillMyPlaybillProfileSection: View {
         let db = PlaybillStore.rawDatabase()
         pendingIdentifications = db.pendingWatchResolutions.sorted { $0.createdAt > $1.createdAt }
         let full = db.activities.filter { $0.completion == .full }
+        let watchedTargetIDs = Set(full.map(\.targetID))
+        let trackedShows = db.trackedShows
+        let episodeWatchesByShow = playbillWatchedEpisodesByShow(
+            db: db,
+            trackedShows: trackedShows,
+            fullActivities: full
+        )
+        var activeRewatchByShow: [String: (episode: CatalogEntry, progress: TitlePlaybackProgress)] = [:]
+        for (targetID, playback) in db.playbackProgress where playback.hasPartialResume {
+            guard watchedTargetIDs.contains(targetID),
+                  let episode = db.catalog[targetID],
+                  episode.kind == .episode else { continue }
+            let showTargetID = episode.parentShowID ?? CatalogEntry.showID(episode.tmdbID)
+            guard db.catalog[showTargetID]?.kind == .tvShow else { continue }
+            if let existing = activeRewatchByShow[showTargetID],
+               existing.progress.updatedAt >= playback.updatedAt {
+                continue
+            }
+            activeRewatchByShow[showTargetID] = (episode, playback)
+        }
         var grouped: [MyPlaybillShelfKind: [MyPlaybillItem]] = [:]
 
-        for tracked in db.trackedShows {
+        for tracked in trackedShows {
             guard let show = db.catalog[tracked.targetID], show.kind == .tvShow else { continue }
-            let episodeWatches = full.filter { db.catalog[$0.targetID]?.parentShowID == show.id }
-            let distinctWatched = Set(episodeWatches.map(\.targetID)).count
+            let episodeWatches = episodeWatchesByShow[show.id, default: []]
+            let distinctWatched = PlaybillShowProgress.watchedEpisodeIDs(for: show.id).count
             let latest = episodeWatches.max { $0.watchedAt < $1.watchedAt }
-            let knownTotal = max(show.totalEpisodeCount ?? 0, distinctWatched)
+            let knownTotal = max(PlaybillStore.displayEpisodeTotal(for: show), distinctWatched)
             let kind = MyPlaybillShelfKind(status: tracked.status)
             let progress: Double
-            let label: String
+            var label: String
 
             switch tracked.status {
             case .watching:
@@ -1365,12 +1441,23 @@ struct PlaybillMyPlaybillProfileSection: View {
                 label = "Stopped after \(distinctWatched) episodes"
             }
 
+            if let rewatch = activeRewatchByShow[show.id] {
+                let season = rewatch.episode.seasonNumber ?? 0
+                let episode = rewatch.episode.episodeNumber ?? 0
+                let code = String(format: "S%02dE%02d", season, episode)
+                let percent = Int((rewatch.progress.fraction * 100).rounded())
+                label = "Rewatching \(code) · \(percent)%"
+            }
+
             grouped[kind, default: []].append(MyPlaybillItem(
                 entry: show,
                 progress: min(max(progress, 0), 1),
                 progressLabel: label,
-                lastActivityAt: latest?.watchedAt ?? tracked.trackedAt,
-                activityID: latest?.id
+                lastActivityAt: activeRewatchByShow[show.id]?.progress.updatedAt
+                    ?? latest?.watchedAt
+                    ?? tracked.trackedAt,
+                activityID: latest?.id,
+                repeatCount: PlaybillStore.seriesRepeatWatchCount(for: show.id)
             ))
         }
 
@@ -1382,20 +1469,23 @@ struct PlaybillMyPlaybillProfileSection: View {
                     progress: 0,
                     progressLabel: "Not started",
                     lastActivityAt: listItem.addedAt,
-                    activityID: nil
+                    activityID: nil,
+                    repeatCount: 0
                 ))
             }
         }
 
         let inProgressMovies = db.playbackProgress.compactMap { targetID, playback -> MyPlaybillItem? in
             guard playback.hasPartialResume,
+                  !watchedTargetIDs.contains(targetID),
                   let entry = db.catalog[targetID], entry.kind == .movie else { return nil }
             return MyPlaybillItem(
                 entry: entry,
                 progress: playback.fraction,
                 progressLabel: "\(Int((playback.fraction * 100).rounded()))% watched",
                 lastActivityAt: playback.updatedAt,
-                activityID: nil
+                activityID: nil,
+                repeatCount: 0
             )
         }
         grouped[.filmInProgress] = inProgressMovies
@@ -1405,14 +1495,19 @@ struct PlaybillMyPlaybillProfileSection: View {
             guard let entry = db.catalog[activity.targetID], entry.kind == .movie else { return nil }
             return PlaybillDiaryItem(activity: activity, entry: entry)
         }, by: { $0.entry.id })
-        for (targetID, watches) in watchedMovies where !inProgressIDs.contains(targetID) {
+        for (targetID, watches) in watchedMovies {
             guard let latest = watches.max(by: { $0.activity.watchedAt < $1.activity.watchedAt }) else { continue }
+            let rewatchProgress = db.playbackProgress[targetID].flatMap { $0.hasPartialResume ? $0 : nil }
+            let progressLabel = rewatchProgress.map {
+                "Rewatching · \(Int(($0.fraction * 100).rounded()))%"
+            } ?? "Watched"
             grouped[.filmWatched, default: []].append(MyPlaybillItem(
                 entry: latest.entry,
                 progress: 1,
-                progressLabel: watches.count > 1 ? "Watched \(watches.count) times" : "Watched",
-                lastActivityAt: latest.activity.watchedAt,
-                activityID: latest.activity.id
+                progressLabel: progressLabel,
+                lastActivityAt: rewatchProgress?.updatedAt ?? latest.activity.watchedAt,
+                activityID: latest.activity.id,
+                repeatCount: watches.count
             ))
         }
 
@@ -1425,11 +1520,10 @@ struct PlaybillMyPlaybillProfileSection: View {
     }
 
     private func refreshDerivedStates() async {
-        for tracked in PlaybillStore.trackedShows() {
-            guard !Task.isCancelled else { return }
-            _ = await PlaybillShowProgress.reconcileTrackingState(for: tracked.targetID)
+        await Task.yield()
+        if PlaybillStore.demoteIncompleteCompletedShows() > 0 {
+            reload()
         }
-        reload()
     }
 }
 
@@ -1518,6 +1612,7 @@ private struct MyPlaybillItem: Identifiable {
     let progressLabel: String
     let lastActivityAt: Date
     let activityID: UUID?
+    let repeatCount: Int
     var id: String { entry.id }
 }
 
@@ -1558,7 +1653,10 @@ struct PlaybillMyPlaybillSection: View {
         .onDisappear {
             if let playbillToken { EventBus.shared.unsubscribe(playbillToken) }
         }
-        .task { await refreshDerivedStates() }
+        .task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await refreshDerivedStates()
+        }
     }
 
     private var stateOverview: some View {
@@ -1629,10 +1727,15 @@ struct PlaybillMyPlaybillSection: View {
                         .frame(width: 58, height: 36)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.entry.title)
-                            .font(KinemaType.labelStrong)
-                            .foregroundStyle(KinemaTheme.paper)
-                            .lineLimit(1)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(item.entry.title)
+                                .font(KinemaType.labelStrong)
+                                .foregroundStyle(KinemaTheme.paper)
+                                .lineLimit(1)
+                            if item.repeatCount > 1 {
+                                PlaybillRepeatBadge(count: item.repeatCount, scale: .chip)
+                            }
+                        }
                         Text(item.detail)
                             .font(KinemaType.micro)
                             .foregroundStyle(KinemaTheme.secondaryText)
@@ -1671,6 +1774,9 @@ struct PlaybillMyPlaybillSection: View {
                                     .foregroundStyle(KinemaTheme.secondaryText)
                             }
                             Spacer()
+                            if group.repeatCount > 1 {
+                                PlaybillRepeatBadge(count: group.repeatCount, scale: .chip)
+                            }
                             Text(group.lastWatched, style: .relative)
                                 .font(KinemaType.micro)
                                 .foregroundStyle(KinemaTheme.secondaryText)
@@ -1712,24 +1818,34 @@ struct PlaybillMyPlaybillSection: View {
     private func reload() {
         let db = PlaybillStore.rawDatabase()
         let full = db.activities.filter { $0.completion == .full }
+        let trackedShows = db.trackedShows
+        let episodeWatchesByShow = playbillWatchedEpisodesByShow(
+            db: db,
+            trackedShows: trackedShows,
+            fullActivities: full
+        )
         var byStatus: [TrackedShowStatus: [PlaybillStateItem]] = [:]
 
-        for tracked in db.trackedShows {
+        for tracked in trackedShows {
             guard let show = db.catalog[tracked.targetID] else { continue }
-            let episodeWatches = full.filter { activity in
-                db.catalog[activity.targetID]?.parentShowID == show.id
-            }
+            let episodeWatches = episodeWatchesByShow[show.id, default: []]
             let detail: String
             switch tracked.status {
             case .watching:
-                detail = episodeWatches.isEmpty ? "Not started" : "\(Set(episodeWatches.map(\.targetID)).count) episodes watched"
+                let watchedCount = PlaybillShowProgress.watchedEpisodeIDs(for: show.id).count
+                detail = watchedCount == 0 ? "Not started" : "\(watchedCount) episodes watched"
             case .planToWatch: detail = "Saved to watch later"
             case .waiting: detail = "Caught up · waiting for a new season"
             case .completed: detail = "Finished series"
             case .dropped: detail = "Stopped watching"
             }
             byStatus[tracked.status, default: []].append(
-                PlaybillStateItem(entry: show, detail: detail, activityID: episodeWatches.max(by: { $0.watchedAt < $1.watchedAt })?.id)
+                PlaybillStateItem(
+                    entry: show,
+                    detail: detail,
+                    activityID: episodeWatches.max(by: { $0.watchedAt < $1.watchedAt })?.id,
+                    repeatCount: PlaybillStore.seriesRepeatWatchCount(for: show.id)
+                )
             )
         }
 
@@ -1738,7 +1854,12 @@ struct PlaybillMyPlaybillSection: View {
             for listItem in db.listItems where listItem.listID == watchlistID && !trackedIDs.contains(listItem.targetID) {
                 guard let entry = db.catalog[listItem.targetID] else { continue }
                 byStatus[.planToWatch, default: []].append(
-                    PlaybillStateItem(entry: entry, detail: "Added \(listItem.addedAt.formatted(date: .abbreviated, time: .omitted))", activityID: nil)
+                    PlaybillStateItem(
+                        entry: entry,
+                        detail: "Added \(listItem.addedAt.formatted(date: .abbreviated, time: .omitted))",
+                        activityID: nil,
+                        repeatCount: 0
+                    )
                 )
             }
         }
@@ -1749,9 +1870,14 @@ struct PlaybillMyPlaybillSection: View {
         }, by: { $0.entry.id })
         for (_, watches) in watchedMovies {
             guard let latest = watches.max(by: { $0.activity.watchedAt < $1.activity.watchedAt }) else { continue }
-            let detail = watches.count > 1 ? "Watched \(watches.count) times" : "Watched"
+            let detail = "Watched"
             byStatus[.completed, default: []].append(
-                PlaybillStateItem(entry: latest.entry, detail: detail, activityID: latest.activity.id)
+                PlaybillStateItem(
+                    entry: latest.entry,
+                    detail: detail,
+                    activityID: latest.activity.id,
+                    repeatCount: watches.count
+                )
             )
         }
 
@@ -1783,18 +1909,26 @@ struct PlaybillMyPlaybillSection: View {
             let distinctCount = Set(activities.map(\.targetID)).count
             let detail = watchedEntry.kind == .episode
                 ? "\(distinctCount) episode\(distinctCount == 1 ? "" : "s") watched"
-                : (activities.count > 1 ? "Watched \(activities.count) times" : "Film watched")
-            return PlaybillActivityGroup(entry: entry, detail: detail, lastWatched: latest.watchedAt, activityID: latest.id)
+                : "Film watched"
+            let repeatCount = entry.kind == .tvShow
+                ? PlaybillStore.seriesRepeatWatchCount(for: entry.id)
+                : activities.count
+            return PlaybillActivityGroup(
+                entry: entry,
+                detail: detail,
+                lastWatched: latest.watchedAt,
+                activityID: latest.id,
+                repeatCount: repeatCount
+            )
         }
         .sorted { $0.lastWatched > $1.lastWatched }
     }
 
     private func refreshDerivedStates() async {
-        for tracked in PlaybillStore.trackedShows() {
-            guard !Task.isCancelled else { return }
-            _ = await PlaybillShowProgress.reconcileTrackingState(for: tracked.targetID)
+        await Task.yield()
+        if PlaybillStore.demoteIncompleteCompletedShows() > 0 {
+            reload()
         }
-        reload()
     }
 }
 
@@ -1802,6 +1936,7 @@ private struct PlaybillStateItem: Identifiable {
     let entry: CatalogEntry
     let detail: String
     let activityID: UUID?
+    let repeatCount: Int
     var id: String { entry.id }
 }
 
@@ -1819,6 +1954,7 @@ private struct PlaybillActivityGroup: Identifiable {
     let detail: String
     let lastWatched: Date
     let activityID: UUID
+    let repeatCount: Int
     var id: String { entry.id }
 }
 
@@ -2046,13 +2182,21 @@ struct PlaybillSearchSection: View {
                 KinemaSectionTitle("Results", systemImage: "sparkles")
                 LazyVStack(spacing: 10) {
                     ForEach(results) { result in
-                        Button {
-                            selectedResult = result
-                            watchedAt = Date()
-                        } label: {
-                            PlaybillSearchRow(result: result)
+                        let state = PlaybillStore.titleState(for: result)
+                        if state.isExisting {
+                            NavigationLink(value: route(for: result)) {
+                                PlaybillSearchRow(result: result, state: state)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                selectedResult = result
+                                watchedAt = Date()
+                            } label: {
+                                PlaybillSearchRow(result: result, state: state)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -2061,6 +2205,10 @@ struct PlaybillSearchSection: View {
             NavigationStack {
                 PlaybillAddSheet(result: result, watchedAt: $watchedAt, viewModel: viewModel)
             }
+            #if os(iOS)
+            .presentationDetents(result.kind == .tvShow ? [.height(360)] : [.medium])
+            .presentationDragIndicator(.visible)
+            #endif
             #if os(macOS)
             .frame(minWidth: 400)
             #endif
@@ -2086,10 +2234,25 @@ struct PlaybillSearchSection: View {
             }
         }
     }
+
+    private func route(for result: PlaybillSearchResult) -> PlaybillRoute {
+        let entry = PlaybillStore.entry(for: result.id) ?? CatalogEntry(
+            id: result.id,
+            kind: result.kind,
+            tmdbID: result.tmdbID,
+            title: result.title,
+            subtitle: result.subtitle,
+            year: result.year,
+            overview: result.overview,
+            posterPath: result.posterPath
+        )
+        return entry.kind == .tvShow ? .show(entry) : .title(entry, nil)
+    }
 }
 
 struct PlaybillSearchRow: View {
     let result: PlaybillSearchResult
+    var state: PlaybillTitleState = .new
 
     var body: some View {
         HStack(spacing: 14) {
@@ -2112,14 +2275,55 @@ struct PlaybillSearchRow: View {
                 .foregroundStyle(KinemaTheme.secondaryText)
             }
             Spacer(minLength: 0)
-            Image(systemName: "plus.circle.fill")
-                .foregroundStyle(KinemaTheme.accent)
+            stateBadge
         }
         .padding(14)
         .background(KinemaTheme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(KinemaTheme.hairline.opacity(0.78), lineWidth: 0.6)
+        }
+    }
+
+    private var stateBadge: some View {
+        Label(stateLabel, systemImage: stateIcon)
+            .font(KinemaType.microBold)
+            .foregroundStyle(stateTint)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(minWidth: state.isExisting ? 30 : 58, minHeight: 30)
+            .background(stateTint.opacity(0.12), in: Capsule())
+            .accessibilityLabel(stateLabel)
+    }
+
+    private var stateLabel: String {
+        switch state {
+        case .new:
+            return result.kind == .tvShow ? "Track" : "Add"
+        case let .tracked(status):
+            return status.label
+        case let .watched(count):
+            return count == 1 ? "Watched" : "\(count) watched"
+        case .watchLater:
+            return "Watch later"
+        }
+    }
+
+    private var stateIcon: String {
+        switch state {
+        case .new: return "plus.circle.fill"
+        case let .tracked(status): return status.icon
+        case .watched: return "checkmark.circle.fill"
+        case .watchLater: return "bookmark.fill"
+        }
+    }
+
+    private var stateTint: Color {
+        switch state {
+        case .new: return KinemaTheme.accent
+        case let .tracked(status): return status.tint
+        case .watched: return .green
+        case .watchLater: return KinemaTheme.brass
         }
     }
 }
@@ -2134,6 +2338,8 @@ struct PlaybillAddSheet: View {
     @State private var connectivity = PlaybillConnectivity.shared
 
     private var isSeries: Bool { result.kind == .tvShow }
+    private var titleState: PlaybillTitleState { PlaybillStore.titleState(for: result) }
+    private var alreadyInPlaybill: Bool { titleState.isExisting }
 
     var body: some View {
         ZStack {
@@ -2156,7 +2362,9 @@ struct PlaybillAddSheet: View {
                         }
                     }
 
-                    if !isSeries {
+                    if alreadyInPlaybill {
+                        existingStateBlock
+                    } else if !isSeries {
                         DatePicker(KinemaCopy.playbillWatchedDate, selection: $watchedAt, displayedComponents: [.date, .hourAndMinute])
                     } else {
                         Text("Track this series to see the next episode, catch up on what you missed, and follow your progress.")
@@ -2172,8 +2380,8 @@ struct PlaybillAddSheet: View {
 
                     Button(action: primaryAction) {
                         KinemaComposerButtonLabel(
-                            isSeries ? KinemaCopy.playbillTrackSeries : KinemaCopy.playbillMarkWatched,
-                            systemImage: isSeries ? "tv" : "checkmark.circle",
+                            primaryButtonTitle,
+                            systemImage: alreadyInPlaybill ? "arrow.right.circle" : (isSeries ? "tv" : "checkmark.circle"),
                             showsProgress: isSaving
                         )
                     }
@@ -2182,7 +2390,7 @@ struct PlaybillAddSheet: View {
                     .kinemaComposerButtonStyle()
                     .disabled(isSaving)
 
-                    if !isSeries {
+                    if !isSeries && !alreadyInPlaybill {
                         Button(action: addToWatchlist) {
                             KinemaComposerButtonLabel(KinemaCopy.playbillAddToWatchlist, systemImage: "bookmark")
                         }
@@ -2205,12 +2413,73 @@ struct PlaybillAddSheet: View {
         }
     }
 
+    private var existingStateBlock: some View {
+        HStack(spacing: 10) {
+            Image(systemName: existingStateIcon)
+                .foregroundStyle(existingStateTint)
+            Text(existingStateMessage)
+                .font(KinemaType.label)
+                .foregroundStyle(KinemaTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(KinemaTheme.raisedBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var primaryButtonTitle: String {
+        if alreadyInPlaybill {
+            return isSeries ? "Open series" : "Open title"
+        }
+        return isSeries ? KinemaCopy.playbillTrackSeries : KinemaCopy.playbillMarkWatched
+    }
+
+    private var existingStateMessage: String {
+        switch titleState {
+        case let .tracked(status):
+            return "Already in Playbill · \(status.label)"
+        case let .watched(count):
+            let noun = isSeries ? "episodes watched" : "watches"
+            return "Already in Playbill · \(count) \(noun)"
+        case .watchLater:
+            return "Already in Playbill · Watch later"
+        case .new:
+            return ""
+        }
+    }
+
+    private var existingStateIcon: String {
+        switch titleState {
+        case let .tracked(status): return status.icon
+        case .watched: return "checkmark.circle.fill"
+        case .watchLater: return "bookmark.fill"
+        case .new: return "plus.circle.fill"
+        }
+    }
+
+    private var existingStateTint: Color {
+        switch titleState {
+        case let .tracked(status): return status.tint
+        case .watched: return .green
+        case .watchLater: return KinemaTheme.brass
+        case .new: return KinemaTheme.accent
+        }
+    }
+
     private func primaryAction() {
+        if alreadyInPlaybill {
+            openExisting()
+            return
+        }
         if isSeries {
             trackSeries()
         } else {
             logWatch()
         }
+    }
+
+    private func openExisting() {
+        dismiss()
+        viewModel.showOSD("Already in Playbill")
     }
 
     private func trackSeries() {
@@ -2266,33 +2535,61 @@ struct PlaybillAddSheet: View {
             _ = PlaybillStore.upsertCatalog(enriched)
             if localEntry.kind == .tvShow {
                 await PlaybillShowProgress.warmCache(for: localEntry.id)
-                _ = await PlaybillShowProgress.reconcileTrackingState(for: localEntry.id)
+                _ = await PlaybillShowProgress.reconcileTrackingState(for: localEntry.id, allowNetwork: true)
             }
         }
     }
 }
 
 struct PlaybillStatsSection: View {
-    @State private var stats = PlaybillStatistics.empty
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var insight = PlaybillInsightSnapshot.empty
+    @State private var selectedRange: PlaybillStatsRange = .thirtyDays
+    @State private var showDataTools = false
     @State private var playbillToken: UUID?
 
+    private var selectedStats: PlaybillRangeStats {
+        insight.ranges[selectedRange] ?? .empty
+    }
+
+    private var trendPoints: [PlaybillTrendPoint] {
+        selectedStats.trendPoints(for: selectedRange)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            overview
+        VStack(alignment: .leading, spacing: 34) {
+            storyOpening
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], spacing: 12) {
-                activityTrend
-                watchingMix
-                consistency
-                queueHealth
+            if selectedStats.watches == 0 {
+                emptyStory
+            } else {
+                viewingRhythm
+                evidence
+                if selectedStats.filmHours + selectedStats.seriesHours > 0 {
+                    formatStory
+                }
+
+                if !selectedStats.topTitles.isEmpty {
+                    signatures
+                }
+
+                if let latestTitle = selectedStats.latestTitle,
+                   let latestWatchedAt = selectedStats.latestWatchedAt {
+                    latestNote(title: latestTitle, watchedAt: latestWatchedAt)
+                }
             }
 
-            if !insight.topFilmGenres.isEmpty || !insight.topSeriesGenres.isEmpty || !insight.topShows.isEmpty {
-                favorites
-            }
+            Divider().overlay(KinemaTheme.hairline)
 
-            PlaybillDataSection()
+            DisclosureGroup(isExpanded: $showDataTools) {
+                PlaybillDataSection()
+                    .padding(.top, 12)
+            } label: {
+                Label("Data & imports", systemImage: "externaldrive.fill.badge.plus")
+                    .font(KinemaType.labelStrong)
+                    .foregroundStyle(KinemaTheme.secondaryText)
+            }
+            .tint(KinemaTheme.brass)
         }
         .onAppear {
             reload()
@@ -2305,287 +2602,521 @@ struct PlaybillStatsSection: View {
         }
     }
 
-    private var overview: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                KinemaSectionTitle("At a glance", systemImage: "waveform.path.ecg")
-                Spacer()
-                Text("All time")
-                    .font(KinemaType.metadataStrong)
-                    .foregroundStyle(KinemaTheme.secondaryText)
+    private var storyOpening: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if horizontalSizeClass == .compact {
+                VStack(alignment: .leading, spacing: 14) {
+                    rangePicker
+                    storyCopy
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center, spacing: 24) {
+                        rangeEyebrow
+                        Spacer(minLength: 24)
+                        rangePicker
+                    }
+                    storyMessage
+                }
             }
+        }
+    }
 
-            HStack(alignment: .lastTextBaseline, spacing: 18) {
-                Text(String(format: "%.0f", stats.totalWatchedHours))
-                    .font(KinemaType.display)
-                    .foregroundStyle(KinemaTheme.paper)
-                    .monospacedDigit()
-                Text("hours watched")
+    private var storyCopy: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            rangeEyebrow
+            storyMessage
+        }
+    }
+
+    private var rangeEyebrow: some View {
+        Text(selectedRange.contextLabel.uppercased())
+            .font(KinemaType.microBold)
+            .tracking(1.4)
+            .foregroundStyle(KinemaTheme.brass)
+    }
+
+    private var storyMessage: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(storyHeadline)
+                .font(KinemaType.display)
+                .foregroundStyle(KinemaTheme.paper)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if selectedStats.watches > 0 {
+                Text(storyContext)
                     .font(KinemaType.label)
                     .foregroundStyle(KinemaTheme.secondaryText)
-                    .padding(.bottom, 7)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("\(insight.currentMonthHours.formatted(.number.precision(.fractionLength(1)))) hours this month")
-                        .font(KinemaType.labelStrong)
-                        .foregroundStyle(KinemaTheme.paper)
-                    Text(insight.monthComparison)
-                        .font(KinemaType.metadataStrong)
-                    .foregroundStyle(insight.monthDeltaHours >= 0 ? Color.green : KinemaTheme.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: 760, alignment: .leading)
+    }
+
+    private var rangePicker: some View {
+        Picker("Reel range", selection: $selectedRange) {
+            ForEach(PlaybillStatsRange.allCases) { range in
+                Text(range.title).tag(range)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: horizontalSizeClass == .compact ? .infinity : 300)
+    }
+
+    private var storyHeadline: String {
+        guard selectedStats.watches > 0 else { return "Your reel is waiting for its first scene." }
+
+        if selectedRange == .thirtyDays, insight.previous30DaysHours > 0 {
+            let delta = selectedStats.hours - insight.previous30DaysHours
+            let threshold = max(0.5, insight.previous30DaysHours * 0.12)
+            if abs(delta) >= threshold {
+                return "You watched \(PlaybillDurationFormatter.compact(hours: abs(delta))) \(delta > 0 ? "more" : "less") than in the previous 30 days."
+            }
+        }
+
+        let total = selectedStats.filmHours + selectedStats.seriesHours
+        if total <= 0 {
+            return "You completed \(selectedStats.watches) \(selectedStats.watches == 1 ? "watch" : "watches") in this chapter."
+        }
+        let seriesShare = total > 0 ? selectedStats.seriesHours / total : 0
+        if seriesShare >= 0.65 { return "Series shaped most of this chapter of your reel." }
+        if seriesShare <= 0.35 { return "Films took the leading role in this chapter." }
+        return "Films and series shared the screen almost evenly."
+    }
+
+    private var storyContext: String {
+        let dayCopy = selectedStats.activeDays == 1 ? "day" : "days"
+        let watchCopy = selectedStats.watches == 1 ? "watch" : "watches"
+        return "\(PlaybillDurationFormatter.compact(hours: selectedStats.hours)) across \(selectedStats.watches) \(watchCopy), spread over \(selectedStats.activeDays) active \(dayCopy)."
+    }
+
+    private var emptyStory: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "film")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(KinemaTheme.brass)
+            Text("Completed watches in this period will become a simple visual story here—without turning your viewing into a scorecard.")
+                .font(KinemaType.label)
+                .foregroundStyle(KinemaTheme.secondaryText)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var viewingRhythm: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            narrativeLabel("The rhythm", detail: rhythmTakeaway)
+            trendChart
+        }
+    }
+
+    private var rhythmTakeaway: String {
+        guard let peak = trendPoints.max(by: { $0.hours < $1.hours }), peak.hours > 0 else {
+            return "Your watching was spread lightly across the period."
+        }
+        return "Your strongest stretch was \(peak.label), with \(PlaybillDurationFormatter.compact(hours: peak.hours)) watched."
+    }
+
+    private var trendChart: some View {
+        let peakHours = trendPoints.map(\.hours).max() ?? 0
+        return GeometryReader { geometry in
+            let spacing: CGFloat = trendPoints.count > 8 ? 5 : 10
+            let availableWidth = max(1, geometry.size.width - spacing * CGFloat(max(0, trendPoints.count - 1)))
+            let barWidth = max(5, availableWidth / CGFloat(max(1, trendPoints.count)))
+
+            HStack(alignment: .bottom, spacing: spacing) {
+                ForEach(trendPoints) { point in
+                    let isPeak = point.hours == peakHours && peakHours > 0
+                    VStack(spacing: 7) {
+                        if isPeak {
+                            Text(PlaybillDurationFormatter.compact(hours: point.hours))
+                                .font(KinemaType.microBold)
+                                .foregroundStyle(KinemaTheme.paper)
+                                .lineLimit(1)
+                        } else {
+                            Spacer(minLength: 12)
+                        }
+
+                        RoundedRectangle(cornerRadius: min(5, barWidth / 2), style: .continuous)
+                            .fill(isPeak ? KinemaTheme.accent : KinemaTheme.secondaryText.opacity(0.24))
+                            .frame(
+                                width: barWidth,
+                                height: max(3, 118 * CGFloat(point.hours / max(0.01, peakHours)))
+                            )
+
+                        Text(point.label)
+                            .font(KinemaType.micro)
+                            .foregroundStyle(isPeak ? KinemaTheme.paper : KinemaTheme.secondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(width: barWidth)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        }
+        .frame(height: 168)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rhythmTakeaway)
+    }
 
-            HStack(spacing: 18) {
-                metric("\(insight.uniqueFilms)", "films watched")
-                metric("\(insight.uniqueSeries)", "series watched")
-                metric("\(stats.rewatchCount)", "repeat plays")
+    private var evidence: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Divider().overlay(KinemaTheme.hairline.opacity(0.8))
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 130), spacing: 24, alignment: .leading)],
+                alignment: .leading,
+                spacing: 18
+            ) {
+                evidenceMetric("\(selectedStats.watches)", selectedStats.watches == 1 ? "completed watch" : "completed watches")
+                evidenceMetric("\(selectedStats.activeDays)", selectedStats.activeDays == 1 ? "active day" : "active days")
+                evidenceMetric("\(selectedStats.replays)", selectedStats.replays == 1 ? "rewatch" : "rewatches")
             }
         }
-        .padding(18)
-        .background(KinemaTheme.cardBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(KinemaTheme.hairline.opacity(0.65), lineWidth: 0.6)
-        }
     }
 
-    private var activityTrend: some View {
-        insightCard(title: "12-week rhythm", icon: "chart.bar.xaxis") {
-            PlaybillWeekBars(values: insight.weeklyHours)
-                .frame(height: 112)
-            Text("\(insight.averageHoursPerActiveWeek.formatted(.number.precision(.fractionLength(1)))) hours per active week")
-                .font(KinemaType.metadata)
-                .foregroundStyle(KinemaTheme.secondaryText)
-        }
-    }
+    private var formatStory: some View {
+        let total = max(0.01, selectedStats.filmHours + selectedStats.seriesHours)
+        let seriesShare = selectedStats.seriesHours / total
+        let filmShare = selectedStats.filmHours / total
+        let seriesLeads = seriesShare >= filmShare
 
-    private var watchingMix: some View {
-        insightCard(title: "Time by format", icon: "circle.lefthalf.filled") {
-            let total = max(0.01, insight.filmHours + insight.seriesHours)
-            compositionRow("Series", hours: insight.seriesHours, total: total, color: KinemaTheme.accent)
-            compositionRow("Films", hours: insight.filmHours, total: total, color: KinemaTheme.brass)
-            Text("Comparable viewing time, rather than mixing films with episode counts.")
-                .font(KinemaType.micro)
-                .foregroundStyle(KinemaTheme.secondaryText)
-        }
-    }
+        return VStack(alignment: .leading, spacing: 15) {
+            narrativeLabel("What drove it", detail: formatTakeaway(seriesShare: seriesShare))
 
-    private var consistency: some View {
-        insightCard(title: "Consistency", icon: "calendar.badge.clock") {
-            HStack(spacing: 24) {
-                metric("\(insight.currentStreak)", "day streak")
-                metric("\(insight.activeDays90)", "active days · 90d")
-                metric("\(insight.longestStreak)", "best streak")
+            GeometryReader { geometry in
+                HStack(spacing: 3) {
+                    if seriesShare > 0 {
+                        Capsule()
+                            .fill(seriesLeads ? KinemaTheme.accent : KinemaTheme.secondaryText.opacity(0.28))
+                            .frame(width: max(3, geometry.size.width * CGFloat(seriesShare) - 1.5))
+                    }
+                    if filmShare > 0 {
+                        Capsule()
+                            .fill(seriesLeads ? KinemaTheme.secondaryText.opacity(0.28) : KinemaTheme.accent)
+                            .frame(width: max(3, geometry.size.width * CGFloat(filmShare) - 1.5))
+                    }
+                }
             }
-            Text(insight.currentStreak > 0 ? "You’ve watched something on consecutive days." : "Watch today to begin a new streak.")
-                .font(KinemaType.metadata)
-                .foregroundStyle(KinemaTheme.secondaryText)
-        }
-    }
+            .frame(height: 11)
 
-    private var queueHealth: some View {
-        insightCard(title: "Playbill balance", icon: "rectangle.stack.badge.play") {
             HStack(spacing: 22) {
-                metric("\(insight.watchingCount)", "watching")
-                metric("\(insight.waitingCount)", "waiting")
-                metric("\(insight.watchLaterCount)", "watch later")
-                metric("\(insight.completedCount)", "completed")
-            }
-            if insight.watchLaterCount > insight.completedCount + insight.watchingCount {
-                Label("Your watch-later queue is growing faster than your completed shelf.", systemImage: "exclamationmark.circle")
-                    .font(KinemaType.metadata)
-                    .foregroundStyle(KinemaTheme.brass)
+                formatLegend("Series", hours: selectedStats.seriesHours, share: seriesShare, emphasized: seriesLeads)
+                formatLegend("Films", hours: selectedStats.filmHours, share: filmShare, emphasized: !seriesLeads)
             }
         }
     }
 
-    private var favorites: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            KinemaSectionTitle("Your taste", systemImage: "sparkles")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
-                rankedList(title: "Film genres", values: insight.topFilmGenres, unit: "films")
-                rankedList(title: "Series genres", values: insight.topSeriesGenres, unit: "series")
-                rankedList(title: "Most watched series", values: insight.topShows, unit: "episodes")
-            }
+    private func formatTakeaway(seriesShare: Double) -> String {
+        let percentage = Int((max(seriesShare, 1 - seriesShare) * 100).rounded())
+        if seriesShare >= 0.55 { return "Series accounted for \(percentage)% of your watching time."
         }
+        if seriesShare <= 0.45 { return "Films accounted for \(percentage)% of your watching time."
+        }
+        return "Neither format dominated your watching time."
     }
 
-    private func rankedList(title: String, values: [PlaybillRankedValue], unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(KinemaType.labelStrong)
-                .foregroundStyle(KinemaTheme.paper)
-                .padding(12)
-            ForEach(Array(values.prefix(5).enumerated()), id: \.element.id) { index, value in
-                HStack(spacing: 10) {
-                    Text("\(index + 1)")
-                        .font(KinemaType.timecodeSmall)
-                        .foregroundStyle(KinemaTheme.brass)
-                        .frame(width: 20)
-                    Text(value.label)
-                        .font(KinemaType.label)
-                        .foregroundStyle(KinemaTheme.paper)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(value.value) \(unit)")
-                        .font(KinemaType.metadataStrong)
-                        .foregroundStyle(KinemaTheme.secondaryText)
+    private var signatures: some View {
+        let values = Array(selectedStats.topTitles.prefix(5))
+        let maximum = max(0.01, values.map(\.hours).max() ?? 0)
+        return VStack(alignment: .leading, spacing: 15) {
+            narrativeLabel("The names in the credits", detail: signatureTakeaway(values: values))
+
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Array(values.enumerated()), id: \.element.id) { index, value in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(value.label)
+                                .font(KinemaType.metadataStrong)
+                                .foregroundStyle(KinemaTheme.paper)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(PlaybillDurationFormatter.compact(hours: value.hours))
+                                .font(KinemaType.micro)
+                                .foregroundStyle(KinemaTheme.secondaryText)
+                                .monospacedDigit()
+                        }
+                        GeometryReader { geometry in
+                            Capsule()
+                                .fill(index == 0 ? KinemaTheme.accent : KinemaTheme.secondaryText.opacity(0.24))
+                                .frame(width: max(4, geometry.size.width * CGFloat(value.hours / maximum)))
+                        }
+                        .frame(height: 5)
+                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
-        }
-        .background(KinemaTheme.cardBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(KinemaTheme.hairline.opacity(0.62), lineWidth: 0.6)
+
+            if !selectedStats.topGenres.isEmpty {
+                Text("Your reel leaned toward \(selectedStats.topGenres.prefix(3).map(\.label).joined(separator: ", ")).")
+                    .font(KinemaType.metadata)
+                    .foregroundStyle(KinemaTheme.secondaryText)
+            }
         }
     }
 
-    private func metric(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func signatureTakeaway(values: [PlaybillRankedHours]) -> String {
+        guard let leader = values.first else { return "No title led this period."
+        }
+        return "\(leader.label) held your attention longest."
+    }
+
+    private func latestNote(title: String, watchedAt: Date) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Latest")
+                .font(KinemaType.microBold)
+                .foregroundStyle(KinemaTheme.brass)
+            Text(title)
+                .font(KinemaType.metadataStrong)
+                .foregroundStyle(KinemaTheme.paper)
+                .lineLimit(1)
+            Text("· \(watchedAt.formatted(date: .abbreviated, time: .omitted))")
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
+        }
+    }
+
+    private func narrativeLabel(_ eyebrow: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(eyebrow.uppercased())
+                .font(KinemaType.microBold)
+                .tracking(1.2)
+                .foregroundStyle(KinemaTheme.brass)
+            Text(detail)
+                .font(KinemaType.title)
+                .foregroundStyle(KinemaTheme.paper)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func evidenceMetric(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(value)
                 .font(KinemaType.title)
                 .foregroundStyle(KinemaTheme.paper)
                 .monospacedDigit()
             Text(label)
+                .font(KinemaType.metadata)
+                .foregroundStyle(KinemaTheme.secondaryText)
+        }
+    }
+
+    private func formatLegend(_ label: String, hours: Double, share: Double, emphasized: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(label) · \(Int((share * 100).rounded()))%")
+                .font(KinemaType.metadataStrong)
+                .foregroundStyle(emphasized ? KinemaTheme.paper : KinemaTheme.secondaryText)
+            Text(PlaybillDurationFormatter.compact(hours: hours))
                 .font(KinemaType.micro)
                 .foregroundStyle(KinemaTheme.secondaryText)
         }
     }
 
-    private func compositionRow(_ title: String, hours: Double, total: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(title).font(KinemaType.metadataStrong)
-                Spacer()
-                Text("\(hours.formatted(.number.precision(.fractionLength(1)))) h · \(Int((hours / total) * 100))%")
-                    .font(KinemaType.metadata)
-                    .foregroundStyle(KinemaTheme.secondaryText)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(KinemaTheme.raisedBackground)
-                    Capsule().fill(color).frame(width: geo.size.width * CGFloat(hours / total))
-                }
-            }
-            .frame(height: 7)
-        }
-    }
-
-    private func insightCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
-            Label(title, systemImage: icon)
-                .font(KinemaType.labelStrong)
-                .foregroundStyle(KinemaTheme.paper)
-            content()
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(KinemaTheme.cardBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(KinemaTheme.hairline.opacity(0.62), lineWidth: 0.6)
-        }
-    }
-
     private func reload() {
-        stats = PlaybillStore.statistics()
         insight = PlaybillInsightSnapshot.build()
     }
 }
 
-private struct PlaybillWeekBars: View {
-    let values: [Double]
+private enum PlaybillStatsRange: String, CaseIterable, Identifiable {
+    case thirtyDays
+    case year
+    case allTime
 
-    var body: some View {
-        GeometryReader { geo in
-            let maxValue = max(0.1, values.max() ?? 0.1)
-            HStack(alignment: .bottom, spacing: 5) {
-                ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                    VStack(spacing: 4) {
-                        Spacer(minLength: 0)
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(index == values.count - 1 ? KinemaTheme.accent : KinemaTheme.brass.opacity(0.58))
-                            .frame(height: max(3, geo.size.height * 0.78 * CGFloat(value / maxValue)))
-                        if index == 0 || index == values.count - 1 {
-                            Text(index == values.count - 1 ? "NOW" : "12W")
-                                .font(KinemaType.microBold)
-                                .foregroundStyle(KinemaTheme.secondaryText)
-                        } else {
-                            Text(" ").font(KinemaType.micro)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .thirtyDays: return "30 days"
+        case .year: return "Year"
+        case .allTime: return "All time"
+        }
+    }
+
+    var contextLabel: String {
+        switch self {
+        case .thirtyDays: return "Last 30 days"
+        case .year: return "This year"
+        case .allTime: return "All time"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .thirtyDays: return "calendar.badge.clock"
+        case .year: return "calendar.circle"
+        case .allTime: return "infinity"
+        }
+    }
+
+    func startDate(now: Date, calendar: Calendar) -> Date? {
+        switch self {
+        case .thirtyDays:
+            return calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now))
+        case .year:
+            return calendar.date(from: calendar.dateComponents([.year], from: now))
+        case .allTime:
+            return nil
         }
     }
 }
 
-private struct PlaybillRankedValue: Identifiable {
+private struct PlaybillRankedHours: Identifiable {
     let label: String
-    let value: Int
+    let hours: Double
     var id: String { label }
 }
 
-private struct PlaybillInsightSnapshot {
-    var weeklyHours: [Double]
-    var previousMonthHours: Double
-    var currentMonthHours: Double
+private struct PlaybillTrendPoint: Identifiable {
+    let date: Date
+    let label: String
+    let hours: Double
+    var id: Date { date }
+}
+
+private struct PlaybillRangeStats {
+    var watches: Int
+    var replays: Int
+    var hours: Double
+    var activeDays: Int
+    var latestTitle: String?
+    var latestWatchedAt: Date?
     var filmHours: Double
     var seriesHours: Double
-    var uniqueFilms: Int
-    var uniqueSeries: Int
-    var currentStreak: Int
-    var longestStreak: Int
-    var activeDays90: Int
-    var averageHoursPerActiveWeek: Double
-    var watchingCount: Int
-    var waitingCount: Int
-    var watchLaterCount: Int
-    var completedCount: Int
-    var topFilmGenres: [PlaybillRankedValue]
-    var topSeriesGenres: [PlaybillRankedValue]
-    var topShows: [PlaybillRankedValue]
+    var dayHours: [Date: Double]
+    var topTitles: [PlaybillRankedHours]
+    var topGenres: [PlaybillRankedHours]
 
-    static let empty = PlaybillInsightSnapshot(
-        weeklyHours: Array(repeating: 0, count: 12), previousMonthHours: 0, currentMonthHours: 0,
-        filmHours: 0, seriesHours: 0, uniqueFilms: 0, uniqueSeries: 0,
-        currentStreak: 0, longestStreak: 0, activeDays90: 0, averageHoursPerActiveWeek: 0,
-        watchingCount: 0, waitingCount: 0, watchLaterCount: 0, completedCount: 0,
-        topFilmGenres: [], topSeriesGenres: [], topShows: []
+    static let empty = PlaybillRangeStats(
+        watches: 0, replays: 0, hours: 0, activeDays: 0,
+        latestTitle: nil, latestWatchedAt: nil,
+        filmHours: 0, seriesHours: 0, dayHours: [:], topTitles: [], topGenres: []
     )
 
-    var monthDeltaHours: Double { currentMonthHours - previousMonthHours }
-    var monthComparison: String {
-        if abs(monthDeltaHours) < 0.1 { return "Same pace as this point last month" }
-        let amount = abs(monthDeltaHours).formatted(.number.precision(.fractionLength(1)))
-        return "\(amount) h \(monthDeltaHours > 0 ? "more" : "fewer") than this point last month"
+    func trendPoints(for range: PlaybillStatsRange, now: Date = Date(), calendar: Calendar = .current) -> [PlaybillTrendPoint] {
+        switch range {
+        case .thirtyDays:
+            let today = calendar.startOfDay(for: now)
+            let periodStart = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+            return (0..<6).compactMap { bucket in
+                guard let start = calendar.date(byAdding: .day, value: bucket * 5, to: periodStart) else { return nil }
+                let bucketDays = (0..<5).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+                let value = bucketDays.reduce(0) { $0 + (dayHours[calendar.startOfDay(for: $1)] ?? 0) }
+                return PlaybillTrendPoint(
+                    date: start,
+                    label: start.formatted(.dateTime.month(.abbreviated).day()),
+                    hours: value
+                )
+            }
+
+        case .year:
+            let components = calendar.dateComponents([.year], from: now)
+            let yearStart = calendar.date(from: components) ?? now
+            let monthCount = max(1, (calendar.dateComponents([.month], from: yearStart, to: now).month ?? 0) + 1)
+            return (0..<monthCount).compactMap { offset in
+                guard let start = calendar.date(byAdding: .month, value: offset, to: yearStart),
+                      let end = calendar.date(byAdding: .month, value: 1, to: start) else { return nil }
+                return PlaybillTrendPoint(
+                    date: start,
+                    label: start.formatted(.dateTime.month(.abbreviated)),
+                    hours: hours(from: start, to: end)
+                )
+            }
+
+        case .allTime:
+            guard let firstDay = dayHours.keys.min(), let lastDay = dayHours.keys.max() else { return [] }
+            let firstMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: firstDay)) ?? firstDay
+            let lastMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: lastDay)) ?? lastDay
+            let monthSpan = (calendar.dateComponents([.month], from: firstMonth, to: lastMonth).month ?? 0) + 1
+
+            if monthSpan <= 12 {
+                return (0..<monthSpan).compactMap { offset in
+                    guard let start = calendar.date(byAdding: .month, value: offset, to: firstMonth),
+                          let end = calendar.date(byAdding: .month, value: 1, to: start) else { return nil }
+                    return PlaybillTrendPoint(
+                        date: start,
+                        label: start.formatted(.dateTime.month(.abbreviated)),
+                        hours: hours(from: start, to: end)
+                    )
+                }
+            }
+
+            let firstYear = calendar.component(.year, from: firstDay)
+            let lastYear = calendar.component(.year, from: lastDay)
+            return (firstYear...lastYear).compactMap { year in
+                guard let start = calendar.date(from: DateComponents(year: year)),
+                      let end = calendar.date(byAdding: .year, value: 1, to: start) else { return nil }
+                return PlaybillTrendPoint(date: start, label: String(year), hours: hours(from: start, to: end))
+            }
+        }
     }
+
+    private func hours(from start: Date, to end: Date) -> Double {
+        dayHours.reduce(0) { partial, item in
+            partial + ((item.key >= start && item.key < end) ? item.value : 0)
+        }
+    }
+}
+
+private enum PlaybillDurationFormatter {
+    private static let hoursPerDay = 24.0
+    private static let hoursPerMonth = 24.0 * 30.4375
+    private static let hoursPerYear = 24.0 * 365.25
+
+    static func compact(hours: Double) -> String {
+        guard hours.isFinite, hours > 0 else { return "0m" }
+
+        if hours < 1 {
+            return "\(max(1, Int((hours * 60).rounded())))m"
+        }
+        if hours < hoursPerDay {
+            return "\(hours.formatted(.number.precision(.fractionLength(hours >= 10 ? 0 : 1))))h"
+        }
+
+        return compound(hours: hours)
+    }
+
+    private static func compound(hours: Double) -> String {
+        var remaining = Int((hours * 60).rounded())
+        let units: [(label: String, minutes: Int)] = [
+            ("y", Int(hoursPerYear * 60)),
+            ("mo", Int(hoursPerMonth * 60)),
+            ("d", Int(hoursPerDay * 60)),
+            ("h", 60)
+        ]
+        var parts: [String] = []
+
+        for unit in units {
+            let value = remaining / unit.minutes
+            guard value > 0 else { continue }
+            parts.append("\(value)\(unit.label)")
+            remaining -= value * unit.minutes
+            if parts.count == 2 { break }
+        }
+
+        return parts.isEmpty ? "\(max(1, remaining))m" : parts.joined(separator: " ")
+    }
+}
+
+private struct PlaybillInsightSnapshot {
+    var previous30DaysHours: Double
+    var ranges: [PlaybillStatsRange: PlaybillRangeStats]
+
+    static let empty = PlaybillInsightSnapshot(previous30DaysHours: 0, ranges: [:])
 
     @MainActor
     static func build(now: Date = Date()) -> PlaybillInsightSnapshot {
         let db = PlaybillStore.rawDatabase()
         let activities = db.activities.filter { $0.completion == .full }
         let calendar = Calendar.current
-        let thisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
-        let previousMonth = calendar.date(byAdding: .month, value: -1, to: thisMonth) ?? thisMonth
-        let elapsedDays = max(1, calendar.dateComponents([.day], from: thisMonth, to: now).day ?? 1)
-        let previousPeriodEnd = calendar.date(byAdding: .day, value: elapsedDays + 1, to: previousMonth) ?? thisMonth
-
-        var weekly = Array(repeating: 0.0, count: 12)
-        var filmHours = 0.0
-        var seriesHours = 0.0
-        var currentMonthHours = 0.0
-        var previousMonthHours = 0.0
-        var owningTitles: [String: CatalogEntry] = [:]
-        var showEpisodeIDs: [String: Set<String>] = [:]
+        let today = calendar.startOfDay(for: now)
+        let last30Start = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+        let previous30Start = calendar.date(byAdding: .day, value: -30, to: last30Start) ?? last30Start
+        var previous30DaysHours = 0.0
+        var rangeBuckets = Dictionary(
+            uniqueKeysWithValues: PlaybillStatsRange.allCases.map { ($0, PlaybillRangeAccumulator()) }
+        )
 
         for activity in activities {
             guard let entry = db.catalog[activity.targetID] else { continue }
             let owner = entry.parentShowID.flatMap { db.catalog[$0] } ?? entry
-            owningTitles[owner.id] = owner
             let minutes: Double
             if let seconds = activity.watchedSeconds, seconds > 0 {
                 minutes = seconds / 60
@@ -2593,109 +3124,98 @@ private struct PlaybillInsightSnapshot {
                 minutes = Double(entry.runtimeMinutes ?? owner.runtimeMinutes ?? 0)
             }
             let hours = minutes / 60
-            if owner.kind == .movie { filmHours += hours } else { seriesHours += hours }
-            if activity.watchedAt >= thisMonth { currentMonthHours += hours }
-            if activity.watchedAt >= previousMonth && activity.watchedAt < previousPeriodEnd {
-                previousMonthHours += hours
-            }
-            let weeksAgo = calendar.dateComponents([.weekOfYear], from: activity.watchedAt, to: now).weekOfYear ?? 99
-            if (0..<12).contains(weeksAgo) { weekly[11 - weeksAgo] += hours }
-            if entry.kind == .episode {
-                showEpisodeIDs[owner.id, default: []].insert(entry.id)
-            }
-        }
 
-        let days = Set(activities.map { calendar.startOfDay(for: $0.watchedAt) }).sorted(by: >)
-        let streaks = streakValues(days: days, calendar: calendar, now: now)
-        let cutoff90 = calendar.date(byAdding: .day, value: -89, to: calendar.startOfDay(for: now)) ?? now
-        let activeDays90 = days.filter { $0 >= cutoff90 }.count
-        let activeWeeks = max(1, weekly.filter { $0 > 0 }.count)
+            if activity.watchedAt >= previous30Start && activity.watchedAt < last30Start {
+                previous30DaysHours += hours
+            }
 
-        var filmGenreCounts: [String: Int] = [:]
-        var seriesGenreCounts: [String: Int] = [:]
-        for title in owningTitles.values {
-            for genre in title.genres {
-                if title.kind == .movie {
-                    filmGenreCounts[genre, default: 0] += 1
-                } else {
-                    seriesGenreCounts[genre, default: 0] += 1
+            for range in PlaybillStatsRange.allCases {
+                if let start = range.startDate(now: now, calendar: calendar), activity.watchedAt < start {
+                    continue
                 }
+                rangeBuckets[range, default: PlaybillRangeAccumulator()].add(
+                    activity: activity,
+                    owner: owner,
+                    hours: hours,
+                    calendar: calendar
+                )
             }
         }
-
-        let uniqueFilmIDs = Set(owningTitles.values.filter { $0.kind == .movie }.map(\.id))
-        let uniqueSeriesIDs = Set(owningTitles.values.filter { $0.kind == .tvShow }.map(\.id))
-        var showCounts: [String: Int] = [:]
-        for (showID, ids) in showEpisodeIDs {
-            guard let show = db.catalog[showID] else { continue }
-            showCounts[show.title, default: 0] += ids.count
-        }
-
-        let statuses = Dictionary(grouping: db.trackedShows, by: \.status)
-        let watchlistID = db.lists.first(where: { $0.systemKind == .watchlist })?.id
-        let watchlistIDs = Set(watchlistID.map { id in
-            db.listItems.filter { $0.listID == id }.map(\.targetID)
-        } ?? [])
-        let plannedIDs = Set(statuses[.planToWatch, default: []].map(\.targetID))
-        let queuedIDs = watchlistIDs.union(plannedIDs).subtracting(owningTitles.keys)
 
         return PlaybillInsightSnapshot(
-            weeklyHours: weekly,
-            previousMonthHours: previousMonthHours,
-            currentMonthHours: currentMonthHours,
-            filmHours: filmHours,
-            seriesHours: seriesHours,
-            uniqueFilms: uniqueFilmIDs.count,
-            uniqueSeries: uniqueSeriesIDs.count,
-            currentStreak: streaks.current,
-            longestStreak: streaks.longest,
-            activeDays90: activeDays90,
-            averageHoursPerActiveWeek: weekly.reduce(0, +) / Double(activeWeeks),
-            watchingCount: statuses[.watching, default: []].count,
-            waitingCount: statuses[.waiting, default: []].count,
-            watchLaterCount: queuedIDs.count,
-            completedCount: statuses[.completed, default: []].count + uniqueFilmIDs.count,
-            topFilmGenres: filmGenreCounts.sorted { $0.value > $1.value }.map {
-                PlaybillRankedValue(label: $0.key, value: $0.value)
-            },
-            topSeriesGenres: seriesGenreCounts.sorted { $0.value > $1.value }.map {
-                PlaybillRankedValue(label: $0.key, value: $0.value)
-            },
-            topShows: showCounts.sorted { $0.value > $1.value }.map {
-                PlaybillRankedValue(label: $0.key, value: $0.value)
-            }
+            previous30DaysHours: previous30DaysHours,
+            ranges: rangeBuckets.mapValues { $0.stats() }
         )
     }
+}
 
-    private static func streakValues(days: [Date], calendar: Calendar, now: Date) -> (current: Int, longest: Int) {
-        guard !days.isEmpty else { return (0, 0) }
-        let ascending = days.sorted()
-        var longest = 1
-        var run = 1
-        for index in 1..<ascending.count {
-            if calendar.dateComponents([.day], from: ascending[index - 1], to: ascending[index]).day == 1 {
-                run += 1
-                longest = max(longest, run)
-            } else {
-                run = 1
-            }
+private struct PlaybillRangeAccumulator {
+    var watches = 0
+    var hours = 0.0
+    var filmHours = 0.0
+    var seriesHours = 0.0
+    var days: Set<Date> = []
+    var dayHours: [Date: Double] = [:]
+    var targetCounts: [String: Int] = [:]
+    var titleHours: [String: Double] = [:]
+    var genreHours: [String: Double] = [:]
+    var latestTitle: String?
+    var latestWatchedAt: Date?
+
+    mutating func add(
+        activity: WatchActivity,
+        owner: CatalogEntry,
+        hours: Double,
+        calendar: Calendar
+    ) {
+        watches += 1
+        self.hours += hours
+        let day = calendar.startOfDay(for: activity.watchedAt)
+        days.insert(day)
+        dayHours[day, default: 0] += hours
+        targetCounts[activity.targetID, default: 0] += 1
+        titleHours[owner.title, default: 0] += hours
+        for genre in owner.genres {
+            genreHours[genre, default: 0] += hours
         }
-        let today = calendar.startOfDay(for: now)
-        let latest = days[0]
-        let gap = calendar.dateComponents([.day], from: latest, to: today).day ?? 99
-        guard gap <= 1 else { return (0, longest) }
-        var current = 1
-        for index in 1..<days.count {
-            if calendar.dateComponents([.day], from: days[index], to: days[index - 1]).day == 1 {
-                current += 1
-            } else { break }
+        if owner.kind == .movie {
+            filmHours += hours
+        } else {
+            seriesHours += hours
         }
-        return (current, longest)
+        if latestWatchedAt == nil || activity.watchedAt > latestWatchedAt! {
+            latestTitle = owner.title
+            latestWatchedAt = activity.watchedAt
+        }
+    }
+
+    func stats() -> PlaybillRangeStats {
+        PlaybillRangeStats(
+            watches: watches,
+            replays: targetCounts.values.filter { $0 > 1 }.reduce(0) { $0 + ($1 - 1) },
+            hours: hours,
+            activeDays: days.count,
+            latestTitle: latestTitle,
+            latestWatchedAt: latestWatchedAt,
+            filmHours: filmHours,
+            seriesHours: seriesHours,
+            dayHours: dayHours,
+            topTitles: titleHours
+                .filter { $0.value > 0 }
+                .sorted { lhs, rhs in lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value }
+                .map { PlaybillRankedHours(label: $0.key, hours: $0.value) },
+            topGenres: genreHours
+                .filter { $0.value > 0 }
+                .sorted { lhs, rhs in lhs.value == rhs.value ? lhs.key < rhs.key : lhs.value > rhs.value }
+                .map { PlaybillRankedHours(label: $0.key, hours: $0.value) }
+        )
     }
 }
 
 struct PlaybillDataSection: View {
     @State private var statusMessage: String?
+    @State private var importProgress: TraktImporter.ImportProgress?
+    @State private var isImporting = false
     @State private var showImporter = false
     @State private var showTraktImporter = false
 
@@ -2709,10 +3229,24 @@ struct PlaybillDataSection: View {
                 HStack(spacing: 10) {
                     Button(KinemaCopy.playbillExport, action: exportBackup)
                         .buttonStyle(.bordered)
+                        .disabled(isImporting)
                     Button(KinemaCopy.playbillImport, action: { showImporter = true })
                         .buttonStyle(.bordered)
+                        .disabled(isImporting)
                     Button(KinemaCopy.playbillImportTrakt, action: { showTraktImporter = true })
                         .buttonStyle(.bordered)
+                        .disabled(isImporting)
+                }
+
+                if let importProgress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: importProgress.fraction)
+                            .progressViewStyle(.linear)
+                            .tint(KinemaTheme.brass)
+                        Text(importProgress.message)
+                            .font(KinemaType.metadata)
+                            .foregroundStyle(KinemaTheme.secondaryText)
+                    }
                 }
 
                 if let statusMessage {
@@ -2768,12 +3302,26 @@ struct PlaybillDataSection: View {
         guard case .success(let urls) = result, let url = urls.first else { return }
         Task {
             do {
+                isImporting = true
+                importProgress = trakt ? TraktImporter.ImportProgress(
+                    processed: 0,
+                    total: 1,
+                    imported: 0,
+                    message: "Preparing Trakt import..."
+                ) : nil
+                statusMessage = nil
+                defer {
+                    isImporting = false
+                    importProgress = nil
+                }
                 guard url.startAccessingSecurityScopedResource() else { return }
                 defer { url.stopAccessingSecurityScopedResource() }
                 let data = try Data(contentsOf: url)
                 if trakt {
-                    let count = try await TraktImporter.importHistory(from: data)
-                    statusMessage = "Imported \(count) Trakt entries."
+                    let summary = try await TraktImporter.importHistorySummary(from: data) { progress in
+                        importProgress = progress
+                    }
+                    statusMessage = traktImportStatusMessage(summary)
                 } else {
                     let count = try PlaybillStore.importBackup(from: data, merge: true)
                     statusMessage = "Merged \(count) diary entries."
@@ -2782,6 +3330,17 @@ struct PlaybillDataSection: View {
                 statusMessage = error.localizedDescription
             }
         }
+    }
+
+    private func traktImportStatusMessage(_ summary: TraktImportSummary) -> String {
+        var parts = ["Imported \(summary.added) new Trakt \(summary.added == 1 ? "entry" : "entries")"]
+        if summary.alreadyPresent > 0 {
+            parts.append("\(summary.alreadyPresent) already present")
+        }
+        if summary.repaired > 0 {
+            parts.append("repaired \(summary.repaired) Playbill \(summary.repaired == 1 ? "record" : "records")")
+        }
+        return parts.joined(separator: ", ") + "."
     }
     #endif
 }

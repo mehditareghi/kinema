@@ -343,7 +343,7 @@ public final class PlayerViewModel {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                 playbillMatchPrompt = nil
             }
-            showOSD(KinemaCopy.playbillLogged)
+            showOSD(prompt.purpose == .identifyPlayback ? "Added to Playbill" : KinemaCopy.playbillLogged)
         }
     }
 

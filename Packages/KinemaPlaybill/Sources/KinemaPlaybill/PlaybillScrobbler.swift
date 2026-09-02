@@ -6,12 +6,56 @@ public enum PlaybillScrobbler {
     private static var scrobbledSessionKeys = Set<String>()
     private static var declinedSessionKeys = Set<String>()
     private static var pendingPromptSessionKeys = Set<String>()
+    private static var preparedSessionKeys = Set<String>()
 
     public static func resetSession(for url: URL) {
         let mediaID = WatchProgressStore.mediaID(for: url)
         scrobbledSessionKeys = scrobbledSessionKeys.filter { !$0.hasPrefix("\(mediaID)-") }
         declinedSessionKeys = declinedSessionKeys.filter { !$0.hasPrefix("\(mediaID)-") }
         pendingPromptSessionKeys = pendingPromptSessionKeys.filter { !$0.hasPrefix("\(mediaID)-") }
+        preparedSessionKeys = preparedSessionKeys.filter { !$0.hasPrefix("\(mediaID)-") }
+    }
+
+    /// Identify a newly played title as soon as playback is established, rather than
+    /// waiting until it is complete. Confident matches are added automatically;
+    /// ambiguous matches ask once at playback start.
+    public static func preparePlayback(
+        item: MediaItem,
+        position: TimeInterval,
+        duration: TimeInterval
+    ) async {
+        guard PlaybillPreferencesStore.autoScrobbleEnabled else { return }
+        if item.url.isFileURL == false, !PlaybillPreferencesStore.scrobbleStreams {
+            return
+        }
+        guard position > 5 else { return }
+
+        let sessionKey = sessionKey(for: item.url, duration: duration)
+        guard preparedSessionKeys.insert(sessionKey).inserted else { return }
+
+        switch await PlaybillMatcher.scrobbleResolution(
+            for: item.url,
+            title: item.title
+        ) {
+        case .autoLogged(let targetID):
+            PlaybillStore.beginPlayback(
+                targetID: targetID,
+                position: position,
+                duration: duration
+            )
+        case .needsConfirmation(let candidates):
+            pendingPromptSessionKeys.insert(sessionKey)
+            PlaybillPromptCenter.shared.present(PlaybillMatchPrompt(
+                mediaURL: item.url,
+                mediaTitle: item.title,
+                candidates: candidates,
+                watchedSeconds: position,
+                sessionKey: sessionKey,
+                purpose: .identifyPlayback
+            ))
+        case .noMatch:
+            break
+        }
     }
 
     public static func evaluate(item: MediaItem, position: TimeInterval, duration: TimeInterval) async {
@@ -164,19 +208,28 @@ public enum PlaybillScrobbler {
 
         do {
             let entry = try await PlaybillMatcher.confirmCandidate(url: prompt.mediaURL, candidate: candidate)
-            scrobbledSessionKeys.insert(prompt.sessionKey)
-            if PlaybillStore.logWatch(
-                targetID: entry.id,
-                watchedAt: prompt.watchedAt,
-                source: prompt.source,
-                completion: .full,
-                watchedSeconds: prompt.watchedSeconds
-            ) != nil {
-                MediaWatchCoordinator.syncFileProgressAfterPlaybillWatch(
-                    url: prompt.mediaURL,
-                    title: prompt.mediaTitle,
-                    duration: prompt.watchedSeconds
+            switch prompt.purpose {
+            case .identifyPlayback:
+                PlaybillStore.beginPlayback(
+                    targetID: entry.id,
+                    position: prompt.watchedSeconds,
+                    duration: WatchProgressStore.entry(for: prompt.mediaURL)?.duration ?? 0
                 )
+            case .logCompletedWatch:
+                scrobbledSessionKeys.insert(prompt.sessionKey)
+                if PlaybillStore.logWatch(
+                    targetID: entry.id,
+                    watchedAt: prompt.watchedAt,
+                    source: prompt.source,
+                    completion: .full,
+                    watchedSeconds: prompt.watchedSeconds
+                ) != nil {
+                    MediaWatchCoordinator.syncFileProgressAfterPlaybillWatch(
+                        url: prompt.mediaURL,
+                        title: prompt.mediaTitle,
+                        duration: prompt.watchedSeconds
+                    )
+                }
             }
             if let pendingID = prompt.pendingResolutionID {
                 PlaybillStore.removePendingWatch(id: pendingID)
@@ -184,7 +237,7 @@ public enum PlaybillScrobbler {
         } catch {
             if let pendingID = prompt.pendingResolutionID {
                 PlaybillStore.updatePendingWatchAttempt(id: pendingID, error: error.localizedDescription)
-            } else {
+            } else if prompt.purpose == .logCompletedWatch {
                 scrobbledSessionKeys.insert(prompt.sessionKey)
             }
         }

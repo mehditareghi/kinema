@@ -42,14 +42,16 @@ struct PlaybillMatchOverlay: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("LOG TO PLAYBILL")
+                Text(prompt.purpose == .identifyPlayback ? "IDENTIFY TITLE" : "LOG TO PLAYBILL")
                     .font(KinemaType.eyebrow)
                     .tracking(2)
                     .foregroundStyle(KinemaTheme.brass)
-                Text(KinemaCopy.playbillMatchTitle)
+                Text(prompt.purpose == .identifyPlayback ? "Is this what you’re watching?" : KinemaCopy.playbillMatchTitle)
                     .font(KinemaType.cardTitle)
                     .foregroundStyle(KinemaTheme.paper)
-                Text(KinemaCopy.playbillMatchSubtitle)
+                Text(prompt.purpose == .identifyPlayback
+                    ? "Choose the match to add it to Playbill and begin tracking progress."
+                    : KinemaCopy.playbillMatchSubtitle)
                     .font(KinemaType.metadata)
                     .foregroundStyle(KinemaTheme.secondaryText)
             }
